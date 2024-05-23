@@ -22,10 +22,32 @@ model = BayesianNetwork(
     ]
 )
 
-ses_cpt = TabularCPD(variable='SES', variable_card=3, values=[[0.29],[0.52],[0.19]])
-motivation_cpt = TabularCPD(variable='Motivation', variable_card=2, values=[[0.5],[0.5]])
+ses_cpt = TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]])
+motivation_cpt = TabularCPD(
+    variable="Motivation", variable_card=2, values=[[0.5], [0.5]]
+)
+tutoring_cpt = TabularCPD(
+    variable="Tutoring",
+    variable_card=2,
+    values=[[0.9, 0.6, 0.2], [0.1, 0.4, 0.8]],
+    evidence=["SES"],
+    evidence_card=[3],
+)
+hours_slept_cpt = TabularCPD(
+    variable="Hours slept", variable_card=3, values=[[0.2], [0.7], [0.1]]
+)
 
 model.add_cpds(ses_cpt)
+model.add_cpds(motivation_cpt)
+model.add_cpds(tutoring_cpt)
+model.add_cpds(hours_slept_cpt)
+
+# Print the CPDs
+for cpd in model.get_cpds():
+    print(f"CPD of {cpd.variable}:")
+    print(cpd)
+    print("\n")
+
 
 plt.figure(figsize=(12, 8))
 G = nx.DiGraph()
