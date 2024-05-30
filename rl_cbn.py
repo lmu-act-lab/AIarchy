@@ -3,12 +3,14 @@ from pgmpy.factors.discrete import TabularCPD
 from pgmpy.sampling import BayesianModelSampling
 from pgmpy.factors.discrete import State
 from pgmpy.inference import VariableElimination
+from pgmpy.inference.CausalInference import CausalInference
 from collections import Counter
 import networkx as nx
 import pandas as pd
 import util
 import random
 import numpy as np
+import itertools
 
 # from pgmpy.inference.causal_inference import CausalInference
 import matplotlib.pyplot as plt
@@ -45,17 +47,17 @@ hours_slept_cpt = TabularCPD(
 )
 
 
-def normalize_cpt(values):
-    values = np.array(values)
-    column_sums = values.sum(axis=0)
-    return (values / column_sums).tolist()
+# def normalize_cpt(values):
+#     values = np.array(values)
+#     column_sums = values.sum(axis=0)
+#     return (values / column_sums).tolist()
 
 
 # Example to normalize all CPTs
 time_studying_cpt = TabularCPD(
     variable="Time studying",
     variable_card=3,
-    values=normalize_cpt(
+    values=(
         [
             [0.6, 0.7, 0.3, 0.4, 0.55, 0.65, 0.1, 0.2, 0.4, 0.5, 0.1, 0.2],
             [0.25, 0.2, 0.5, 0.45, 0.3, 0.25, 0.4, 0.35, 0.4, 0.35, 0.3, 0.25],
@@ -90,8 +92,8 @@ MODEL_0.add_cpds(exercise_cpt)
 MODEL_0.add_cpds(extracurricular_cpt)
 MODEL_0.add_cpds(hours_slept_cpt)
 
-# # Print the CPDs
-# for cpd in model.get_cpds():
+# Print the CPDs
+# for cpd in MODEL_0.get_cpds():
 #     print(f"CPD of {cpd.variable}:")
 #     print(cpd)
 #     print("\n")
@@ -100,7 +102,7 @@ MODEL_0.add_cpds(hours_slept_cpt)
 # plt.figure(figsize=(12, 8))
 # G = nx.DiGraph()
 
-# for edge in model.edges():
+# for edge in MODEL_0.edges():
 #     G.add_edge(*edge)
 
 # pos = nx.spring_layout(G, k=2)
@@ -122,13 +124,16 @@ reflective_vars = {"Time studying", "Exercise", "Sleep", "ECs"}
 fixed_vars = {"SES"}
 periodic_vars = {"Tutoring", "Motivation"}
 
+grades_query = ["Time studying", "Tutoring"]
+social_query = ["ECs", "Time studying"]
+health_query = ["Sleep", "Exercise"]
 sampler = BayesianModelSampling(MODEL_0)
 samples = sampler.forward_sample(size=50)
 
 N_SAMPLES = 30
 
 
-def reward(sample: list[dict[str, int]]):
+def reward(sample: dict[str, int]):
     rewards = util.Counter()
     rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
     rewards["social"] += sample["ECs"] - sample["Time studying"]
@@ -158,13 +163,13 @@ def calculate_expected_reward(
 ):
     # Associate with model later
     inference = VariableElimination(model)
-    grade_query = ["Time studying", "Tutoring"]
+    grades_query = ["Time studying", "Tutoring"]
     health_query = ["Sleep", "Exercise"]
     social_query = ["ECs", "Time studying"]
     grade_prob = inference.query(
-        variables=grade_query,
+        variables=grades_query,
         evidence={
-            key: value for key, value in sample.items() if key not in grade_query
+            key: value for key, value in sample.items() if key not in grades_query
         },
     )
 
@@ -209,25 +214,48 @@ def calculate_expected_reward(
     return expected_reward
 
 
-cumulative_expected: float = 0
-iter: int = 0
-sample_rewards = util.Counter()
-while iter < N_SAMPLES:
-    iter += 1
-    evidence = [State("SES", 0)]
+def time_step(fixed_evidence, weights, samples, do=False, intervention={}):
+    cumulative_expected: float = 0
+    iter: int = 0
+    while iter < samples:
+        iter += 1
+        if do:
+            sample = MODEL_0.simulate(
+                n_samples=1, evidence=fixed_evidence, do=intervention
+            )
+        else:
+            sample = MODEL_0.simulate(n_samples=1, evidence=fixed_evidence)
 
-    sampler = BayesianModelSampling(MODEL_0)
-    samples = sampler.likelihood_weighted_sample(size=1, evidence=[State("SES", 0)])
-    samples = samples.drop(columns=["_weight"], axis=1)
-    sample = samples.iloc[0].to_dict()
+        sample = sample.iloc[0].to_dict()
+        weights = util.Counter(weights)
+        rewards = reward(sample)
+        weighted_reward = {}
+        for key in weights.keys():
+            weighted_reward[key] = rewards[key] * weights[key]
 
-    weights = util.Counter({"grades": 0.4, "social": 0.4, "health": 0.2})
-    rewards = reward(sample)
-    weighted_reward = {}
-    for key in weights.keys():
-        weighted_reward[key] = rewards[key] * weights[key]
+        cumulative_expected += sum(
+            calculate_expected_reward(sample, weighted_reward, MODEL_0).values()
+        )
+    return cumulative_expected / samples
 
-    cumulative_expected += sum(
-        calculate_expected_reward(sample, weighted_reward, MODEL_0).values()
-    )
-print(cumulative_expected / N_SAMPLES)
+
+card_dict = {key: MODEL_0.get_cardinality(key) for key in reflective_vars}
+cumulative_dict = {}
+cumulative_dict["no intervention"] = time_step(
+    {"SES": 0},
+    weights,
+    30,
+)
+
+for var, card in card_dict.items():
+    for val in range(card):
+        cumulative_dict[f"{var} : {val}"] = time_step(
+            fixed_evidence={"SES": 0},
+            weights=weights,
+            samples=30,
+            do=True,
+            intervention={var: val},
+        )
+
+for k, v in cumulative_dict.items():
+    print(f"{k} : {v} \n")
