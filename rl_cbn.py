@@ -27,6 +27,10 @@ MODEL_0 = BayesianNetwork(
     ]
 )
 
+HELLO_WORLD_MODEL = BayesianNetwork([("A", "B")])
+a_cpt = TabularCPD(variable="A", variable_card=2, values=[[0.5], [0.5]])
+
+
 ses_cpt = TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]])
 motivation_cpt = TabularCPD(
     variable="Motivation", variable_card=2, values=[[0.5], [0.5]]
@@ -93,7 +97,7 @@ MODEL_0.add_cpds(extracurricular_cpt)
 MODEL_0.add_cpds(hours_slept_cpt)
 
 # Print the CPDs
-# for cpd in MODEL_0.get_cpds():
+# for cpd in HELLO_WORLD_MODEL.get_cpds():
 #     print(f"CPD of {cpd.variable}:")
 #     print(cpd)
 #     print("\n")
@@ -102,7 +106,7 @@ MODEL_0.add_cpds(hours_slept_cpt)
 # plt.figure(figsize=(12, 8))
 # G = nx.DiGraph()
 
-# for edge in MODEL_0.edges():
+# for edge in HELLO_WORLD_MODEL.edges():
 #     G.add_edge(*edge)
 
 # pos = nx.spring_layout(G, k=2)
@@ -127,8 +131,6 @@ periodic_vars = {"Tutoring", "Motivation"}
 grades_query = ["Time studying", "Tutoring"]
 social_query = ["ECs", "Time studying"]
 health_query = ["Sleep", "Exercise"]
-sampler = BayesianModelSampling(MODEL_0)
-samples = sampler.forward_sample(size=50)
 
 N_SAMPLES = 30
 
@@ -141,19 +143,11 @@ def reward(sample: dict[str, int]):
     return rewards
 
 
-sampler = BayesianModelSampling(MODEL_0)
-samples = sampler.likelihood_weighted_sample(size=1, evidence=[State("SES", 0)])
-samples = samples.drop(columns=["_weight"], axis=1)
-sample = samples.iloc[0].to_dict()
+def hello_world_utility(sample: dict[str, int]):
+    return sample["A"]
+
 
 weights = util.Counter({"grades": 0.4, "social": 0.4, "health": 0.2})
-rewards = reward(sample)
-weighted_reward = {}
-for key in weights.keys():
-    weighted_reward[key] = rewards[key] * weights[key]
-
-print(sample)
-print(weighted_reward)
 
 
 def calculate_expected_reward(
@@ -249,7 +243,7 @@ cumulative_dict["no intervention"] = time_step(
 
 for var, card in card_dict.items():
     for val in range(card):
-        cumulative_dict[f"{var} : {val}"] = time_step(
+        cumulative_dict[f"{var}: {val}"] = time_step(
             fixed_evidence={"SES": 0},
             weights=weights,
             samples=30,
@@ -257,5 +251,79 @@ for var, card in card_dict.items():
             intervention={var: val},
         )
 
-for k, v in cumulative_dict.items():
-    print(f"{k} : {v} \n")
+# for k, v in cumulative_dict.items():
+#     print(f"{k} : {v} \n")
+
+# Given the intervention with the highest expected reward, adjust the CPT for that variable in the model
+max_key = max(cumulative_dict, key=cumulative_dict.get)
+variable, value = max_key.split(": ")
+# print(MODEL_0.get_cpds(variable))
+
+
+def make_value_more_likely(cpd, value_index, increase_factor=1.5):
+    values = cpd.values
+    total_values = values.shape[0]
+
+    # Ensure value_index is within bounds
+    if value_index < 0 or value_index >= total_values:
+        raise ValueError("Invalid value_index for the given CPD.")
+
+    # print([values[value_index]])
+
+    # Increase the probability of the specified value
+    values[value_index] += np.minimum(
+        values[value_index] * increase_factor * cumulative_dict[max_key], 1
+    )
+
+    # Normalize the probabilities to ensure they sum to 1
+    sum_values = np.sum(values, axis=0)
+    normalized_values = values / sum_values
+
+    # Update the CPD with normalized values
+    cpd.values = normalized_values
+    return cpd
+
+
+NEXT_MODEL = MODEL_0.copy()
+NEXT_MODEL.remove_cpds(variable)
+NEXT_MODEL.add_cpds(
+    make_value_more_likely(MODEL_0.get_cpds(variable), int(value), increase_factor=1.05)
+)
+
+ITERATIONS = 10
+
+while ITERATIONS > 0:
+    print("in loop")
+    cumulative_dict = {}
+    cumulative_dict["no intervention"] = time_step(
+        {"SES": 0},
+        weights,
+        30,
+    )
+
+    for var, card in card_dict.items():
+        for val in range(card):
+            cumulative_dict[f"{var}: {val}"] = time_step(
+                fixed_evidence={"SES": 0},
+                weights=weights,
+                samples=30,
+                do=True,
+                intervention={var: val},
+            )
+
+    max_key = max(cumulative_dict, key=cumulative_dict.get)
+    if max_key == "no intervention":
+        break
+    variable, value = max_key.split(": ")
+
+    new_cpd = make_value_more_likely(
+        NEXT_MODEL.get_cpds(variable), int(value), increase_factor=1.05
+    )
+    NEXT_MODEL.remove_cpds(NEXT_MODEL.get_cpds(variable))
+    NEXT_MODEL.add_cpds(new_cpd)
+
+    ITERATIONS -= 1
+
+print("Final Model \n")
+for cpd in NEXT_MODEL.get_cpds():
+    print(f"{cpd}\n")
