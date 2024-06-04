@@ -97,10 +97,11 @@ MODEL_0.add_cpds(extracurricular_cpt)
 MODEL_0.add_cpds(hours_slept_cpt)
 
 # Print the CPDs
-# for cpd in HELLO_WORLD_MODEL.get_cpds():
-#     print(f"CPD of {cpd.variable}:")
-#     print(cpd)
-#     print("\n")
+print("Original CPDs of the model:")
+for cpd in MODEL_0.get_cpds():
+    print(f"CPD of {cpd.variable}:")
+    print(cpd)
+    print("\n")
 
 
 # plt.figure(figsize=(12, 8))
@@ -133,7 +134,6 @@ social_query = ["ECs", "Time studying"]
 health_query = ["Sleep", "Exercise"]
 
 N_SAMPLES = 30
-
 
 def reward(sample: dict[str, int]):
     rewards = util.Counter()
@@ -290,7 +290,7 @@ NEXT_MODEL.add_cpds(
     make_value_more_likely(MODEL_0.get_cpds(variable), int(value), increase_factor=1.05)
 )
 
-ITERATIONS = 10
+ITERATIONS = 1000
 
 while ITERATIONS > 0:
     print("in loop")
