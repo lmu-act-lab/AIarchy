@@ -1,10 +1,10 @@
-from rl_cbn import Student
+from student import Student
 import unittest
 import numpy as np
 
 
 low_ses_student = Student({"SES": 0})
-low_ses_student.train(1)
+low_ses_student.train(100)
 
 def is_array_greater(arr1, arr2):
     return np.all(np.greater(arr1, arr2))

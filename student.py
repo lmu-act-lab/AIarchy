@@ -1,7 +1,7 @@
 from pgmpy.models.BayesianModel import BayesianNetwork
 from pgmpy.factors.discrete import TabularCPD
 from pgmpy.sampling import BayesianModelSampling
-from pgmpy.factors.discrete import State
+from pgmpy.factors.discrete import State, DiscreteFactor
 from pgmpy.inference import VariableElimination
 from pgmpy.inference.CausalInference import CausalInference
 from collections import Counter
@@ -14,13 +14,15 @@ import numpy as np
 import itertools
 import warnings
 import matplotlib.pyplot as plt
+import openpyxl
+import csv
 
 warnings.filterwarnings("ignore")
 
 
 class Student:
 
-    def __init__(self, fixed_evidence={}) -> None:
+    def __init__(self, fixed_evidence={}, weights={}) -> None:
         self.model: BayesianNetwork = self.define_model(
             [
                 ("SES", "Tutoring"),
@@ -44,7 +46,7 @@ class Student:
 
         self.sample_num = 30
 
-        self.weights = util.Counter({"grades": 0.4, "social": 0.4, "health": 0.2})
+        self.weights = util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}) if not weights else weights
 
         self.add_cpt(
             TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]])
@@ -155,12 +157,25 @@ class Student:
 
     def get_original_cpts(self) -> list[TabularCPD]:
         return self.original_model.get_cpds()
+    
+    def get_var_cpt(self, var) -> list[TabularCPD]:
+        return self.model.get_cpds(var)
+
+    def get_original__var_cpt(self, var) -> list[TabularCPD]:
+        return self.original_model.get_cpds(var)
 
     def display_cpts(self) -> None:
         for cpd in self.model.get_cpds():
             print(f"CPD of {cpd.variable}:")
             print(cpd)
             print("\n")
+        
+    def display_var_cpt(self, var) -> None:
+        for cpd in self.model.get_cpds():
+            if cpd.variable == var:
+                print(f"CPD of {cpd.variable}:")
+                print(cpd)
+                print("\n")
 
     def display_original_cpts(self) -> None:
         for cpd in self.original_model.get_cpds():
@@ -193,7 +208,7 @@ class Student:
     def reward(self, sample: dict[str, int]):
         rewards = util.Counter()
         rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
-        rewards["social"] += sample["ECs"] - sample["Time studying"]
+        rewards["social"] += sample["ECs"]
         rewards["health"] += sample["Sleep"] + sample["Exercise"]
         return rewards
 
@@ -207,7 +222,7 @@ class Student:
         inference = VariableElimination(model)
         grades_query = ["Time studying", "Tutoring"]
         health_query = ["Sleep", "Exercise"]
-        social_query = ["ECs", "Time studying"]
+        social_query = ["ECs"]
         grade_prob = inference.query(
             variables=grades_query,
             evidence={
@@ -250,7 +265,6 @@ class Student:
                 case "social":
                     assignment = {
                         "ECs": sample["ECs"],
-                        "Time studying": sample["Time studying"],
                     }
                     expected_reward["social"] += reward * social_prob.get_value(
                         **assignment
@@ -323,13 +337,17 @@ class Student:
         return cpd
 
     def train(self, iterations: int):
-        while iterations > 0:
+        cpts = {}
+        for i in range(iterations):
             print("in loop")
+            # if i % 5 == 0:
+            #     self.model.get_cpds("Motivation").values[1] += 0.04
+            #     self.model.get_cpds("Motivation").values[0] -= 0.04
             cumulative_dict = {}
             cumulative_dict["no intervention"] = self.time_step(
                 self.fixed_assignment,
                 self.weights,
-                30,
+                self.sample_num,
             )
 
             for var, card in self.card_dict.items():
@@ -342,6 +360,8 @@ class Student:
                     )
 
             max_key = max(cumulative_dict, key=cumulative_dict.get)
+            if max_key == "no intervention":
+                continue
             variable, value = max_key.split(": ")
 
             new_cpd = self.nudge_cpt(
@@ -349,5 +369,90 @@ class Student:
             )
             self.model.remove_cpds(self.model.get_cpds(variable))
             self.model.add_cpds(new_cpd)
+            if i % 50 == 0:
+                cpts[i] = copy.deepcopy(self)
+        return cpts
+    
+    # Function to convert CPDs to DataFrame
+    def cpd_to_dataframe(self, cpd):
+        levels = [range(card) for card in cpd.cardinality]
+        index = pd.MultiIndex.from_product(levels, names=cpd.variables)
 
-            iterations -= 1
+        # Create the DataFrame
+        df = pd.DataFrame(cpd.values.flatten(), index=index, columns=['Delta'])
+        return df
+    
+    def compute_cpd_delta(self, var):
+        var_cpd = self.model.get_cpds(var)
+        delta_values = var_cpd.values - self.original_model.get_cpds(var).values
+        delta_cpd = DiscreteFactor(variables=var_cpd.variables, cardinality=var_cpd.cardinality, values=delta_values)
+        return delta_cpd
+    
+    def write_cpds_to_csv(self, cpds, name):
+        for cpd in cpds:
+            if cpd.variable not in self.reflective_vars:
+                continue
+            df = self.cpd_to_dataframe(cpd)
+            file_name = f"{name}, {cpd.variable}.csv"
+            df.to_csv(file_name)
+
+    def write_delta_cpd_to_csv(self, cpds, name):
+        for cpd in cpds:
+            if cpd.variable not in self.reflective_vars:
+                continue
+            df = self.cpd_to_dataframe(self.compute_cpd_delta(cpd.variable))
+            file_name = f"Delta for {name}, {cpd.variable}.csv"
+            df.to_csv(file_name)
+    
+broke_academic_student = Student(fixed_evidence={"SES" : 0}, weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}))
+rich_academic_student = Student(fixed_evidence={"SES" : 2}, weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}))
+broke_jock_student = Student(fixed_evidence={"SES" : 0}, weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}))
+rich_jock_student = Student(fixed_evidence={"SES" : 2}, weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}))
+
+# iter_model_x = x.train(1)
+# iter_model_y = y.train(1)
+
+broke_academic_student.train(5)
+
+# x.display_original_cpts()
+# x.display_var_cpt("Time studying")
+# x.display_var_cpt("ECs")
+# x.display_var_cpt("Exercise")
+# x.display_var_cpt("Sleep")
+
+# y.display_original_cpts()
+# y.display_var_cpt("ECs")
+# y.display_var_cpt("Time studying")
+# y.display_var_cpt("Exercise")
+# y.display_var_cpt("Sleep")
+# for iteration, student in iter_model_x.items():
+#     print(f"SES 0 Student: iteration {iteration} :\n")
+#     student.display_var_cpt("Time studying")
+#     student.display_var_cpt("ECs")
+#     student.display_var_cpt("Exercise")
+#     student.display_var_cpt("Sleep")
+
+
+# print("================================================")
+
+# for iteration, student in iter_model_y.items():
+#     print(f"SES 2 Student: iteration {iteration} :\n")
+#     student.display_var_cpt("Time studying")
+#     student.display_var_cpt("ECs")
+#     student.display_var_cpt("Exercise")
+#     student.display_var_cpt("Sleep")
+
+
+
+# Extract CPDs and save to Excel file
+broke_academic_student.write_cpds_to_csv(broke_academic_student.get_cpts(), "Trained for Broke Academic Student")
+broke_academic_student.write_delta_cpd_to_csv(broke_academic_student.get_cpts(), "Delta for Broke Academic Student")
+
+# rich_academic_student.write_cpds_to_csv(rich_academic_student.get_cpts(), "Trained for Rich Academic Student")
+# rich_academic_student.write_delta_cpd_to_csv(rich_academic_student.get_cpts(), "Trained for Rich Academic Student")
+
+# broke_academic_student.write_cpds_to_csv(broke_jock_student.get_cpts(), "Trained for Broke Jock Student")
+# broke_academic_student.write_delta_cpd_to_csv(broke_jock_student.get_cpts(), "Trained for Broke Jock Student")
+
+# rich_jock_student.write_cpds_to_csv(rich_jock_student.get_cpts(), "Trained for Rich Jock Student")
+# rich_jock_student.write_delta_cpd_to_csv(rich_jock_student.get_cpts(), "Trained for Rich Jock Student")
