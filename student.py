@@ -446,7 +446,7 @@ broke_academic_student.train(5)
 
 # Extract CPDs and save to Excel file
 broke_academic_student.write_cpds_to_csv(broke_academic_student.get_cpts(), "Trained for Broke Academic Student")
-broke_academic_student.write_delta_cpd_to_csv(broke_academic_student.get_cpts(), "Delta for Broke Academic Student")
+broke_academic_student.write_delta_cpd_to_csv(broke_academic_student.get_cpts(), "Broke Academic Student")
 
 # rich_academic_student.write_cpds_to_csv(rich_academic_student.get_cpts(), "Trained for Rich Academic Student")
 # rich_academic_student.write_delta_cpd_to_csv(rich_academic_student.get_cpts(), "Trained for Rich Academic Student")
