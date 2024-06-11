@@ -499,10 +499,10 @@ rich_jock_student = Student(
 # iter_model_x = x.train(1)
 # iter_model_y = y.train(1)
 
-brs = broke_academic_student.train(10)
-ras = rich_academic_student.train(10)
-bjs = broke_jock_student.train(10)
-rjs = rich_jock_student.train(10)
+brs = broke_academic_student.train(100)
+ras = rich_academic_student.train(100)
+bjs = broke_jock_student.train(100)
+rjs = rich_jock_student.train(100)
 
 for iter, student in brs.items():
     broke_academic_student.write_cpds_to_csv(
