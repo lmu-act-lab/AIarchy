@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt
 import openpyxl
 import csv
 
-from numba import jit, cuda
-import numpy as np
+# from numba import jit, cuda
+# import numpy as np
 
 warnings.filterwarnings("ignore")
 
@@ -37,6 +37,8 @@ class Student:
                 ("Time studying", "Sleep"),
             ]
         )
+
+        self.utility_vars: set[str] = {"grades", "social", "health"}
         self.reflective_vars: set[str] = {"Time studying", "Exercise", "Sleep", "ECs"}
         self.fixed_vars: set[str] = {"SES"}
         self.fixed_assignment: dict[str, int] = {}
@@ -44,8 +46,20 @@ class Student:
         self.periodic_vars = {"Tutoring", "Motivation"}
 
         self.grades_query = ["Time studying", "Tutoring"]
-        self.social_query = ["ECs", "Time studying"]
+        self.social_query = ["ECs"]
         self.health_query = ["Sleep", "Exercise"]
+
+        self.structural_model = BayesianNetwork(self.model.edges())
+        self.structural_model.add_nodes_from(self.utility_vars)
+        self.structural_model.add_edges_from(
+            [
+                ("Time studying", "grades"),
+                ("Tutoring", "grades"),
+                ("ECs", "social"),
+                ("Sleep", "health"),
+                ("Exercise", "health"),
+            ]
+        )
 
         self.sample_num = 100
         self.alpha = 0.01
@@ -195,7 +209,7 @@ class Student:
         plt.figure(figsize=(12, 8))
         G = nx.DiGraph()
 
-        for edge in self.model.edges():
+        for edge in self.structural_model.edges():
             G.add_edge(*edge)
 
         pos = nx.spring_layout(G, k=2)
@@ -288,7 +302,7 @@ class Student:
         return cpd.values[value]
 
     def time_step(self, fixed_evidence, weights, samples, do={}):
-        cumulative_expected: float = 0
+        list_of_rewards = []
         iter: int = 0
         list_of_samples = []
         while iter < samples:
@@ -308,85 +322,30 @@ class Student:
             for key in weights.keys():
                 weighted_reward[key] = rewards[key] * weights[key]
 
-            cumulative_expected += sum(
-                self.calculate_expected_reward(
-                    sample, weighted_reward, self.model
-                ).values()
+            list_of_rewards.append(
+                self.calculate_expected_reward(sample, weighted_reward, self.model)
             )
-        return (self.get_average_sample(list_of_samples), cumulative_expected / samples)
+        return (
+            self.get_average_dict(list_of_samples, True),
+            self.get_average_dict(list_of_rewards),
+        )
 
-    # for k, v in cumulative_dict.items():
-    #     print(f"{k} : {v} \n")
+    def get_utilities_from_reflective(self, reflective_var):
+        dependent_utility_vars = []
+        for utility in self.utility_vars:
+            if self.structural_model.is_dconnected(reflective_var, utility):
+                dependent_utility_vars.append(utility)
+        return dependent_utility_vars
 
-    # Given the intervention with the highest expected reward, adjust the CPT for that variable in the model
+    def get_average_dict(self, list_of_dicts, round_vals=False):
+        average_dict = sum((Counter(sample) for sample in list_of_dicts), Counter())
+        for key in average_dict:
+            average_dict[key] /= len(list_of_dicts)
+            if round_vals:
+                average_dict[key] = round(average_dict[key])
+        return average_dict
 
-    # print(MODEL_0.get_cpds(variable))
-
-    # def nudge_cpt(self, cpd, value_index, increase_factor, cumulative_dict):
-    #     values = cpd.values
-    #     total_values = values.shape[0]
-
-    #     # Ensure value_index is within bounds
-    #     if value_index < 0 or value_index >= total_values:
-    #         raise ValueError("Invalid value_index for the given CPD.")
-
-    #     # print([values[value_index]])
-    #     max_key = max(cumulative_dict, key=lambda x: cumulative_dict[x][1])
-
-    #     # Increase the probability of the specified value
-    #     values[value_index] += np.minimum(
-    #         values[value_index] * increase_factor * (cumulative_dict[max_key])[1], 1
-    #     )
-
-    #     # Normalize the probabilities to ensure they sum to 1
-    #     sum_values = np.sum(values, axis=0)
-    #     normalized_values = values / sum_values
-
-    #     # Update the CPD with normalized values
-    #     cpd.values = normalized_values
-    #     return cpd
-
-    def get_average_sample(self, list_of_samples):
-        average_sample = sum((Counter(sample) for sample in list_of_samples), Counter())
-        for key in average_sample:
-            average_sample[key] /= len(list_of_samples)
-            average_sample[key] = round(average_sample[key])
-        return average_sample
-
-    # def nudge_cpt(self, cpd, increase_factor, var, value, reward, evidence):
-    #     values = cpd.values
-    #     total_values = values.size
-    #     if var in evidence:
-    #         del evidence[var]
-
-    #     # Convert evidence to index
-    #     evidence_index = []
-    #     for var in cpd.variables:
-    #         if var in evidence:
-    #             evidence_index.append(cpd.state_names[var].index(evidence[var]))
-    #         else:
-    #             evidence_index.append(value)  # Default to first state if no evidence
-    #     value_index = np.ravel_multi_index(evidence_index, values.shape)
-
-    #     # Ensure value_index is within bounds
-    #     if value_index < 0 or value_index >= total_values:
-    #         raise ValueError("Invalid value_index for the given CPD.")
-
-    #     # Increase the probability of the specified value
-    #     values.ravel()[value_index] += np.minimum(
-    #         values.ravel()[value_index] * increase_factor * reward,
-    #         1,
-    #     )
-
-    #     # Normalize the probabilities to ensure they sum to 1
-    #     sum_values = np.sum(values, axis=0)
-    #     normalized_values = values / sum_values
-
-    #     # Update the CPD with normalized values
-    #     cpd.values = normalized_values
-    #     return cpd
-
-    def nudge_cpt(self, cpd, evidence, query_var, query_val, increase_factor, reward):
+    def nudge_cpt(self, cpd, evidence, increase_factor, reward):
         values = cpd.values
         indices = [evidence[variable] for variable in cpd.variables]
         # Convert indices to tuple to use for array indexing
@@ -404,11 +363,12 @@ class Student:
 
     def train(self, iterations: int):
         cpts = {}
+        reward = 0
         for i in range(iterations):
             print("in loop")
-            if i == 30:
-                self.model.get_cpds("Motivation").values[1] += 0.4
-                self.model.get_cpds("Motivation").values[0] -= 0.4
+            # if i == 30:
+            #     self.model.get_cpds("Motivation").values[1] += 0.4
+            #     self.model.get_cpds("Motivation").values[0] -= 0.4
             cumulative_dict = {}
             cumulative_dict["no intervention"] = self.time_step(
                 self.fixed_assignment,
@@ -425,22 +385,25 @@ class Student:
                         do={var: val},
                     )
 
-            max_key = max(cumulative_dict, key=lambda x: cumulative_dict[x][1])
+            max_key = max(
+                cumulative_dict, key=lambda x: sum((cumulative_dict[x][1]).values)
+            )
             if max_key == "no intervention":
                 continue
             variable, value = max_key.split(": ")
+            evidence = cumulative_dict[max_key][0]
+            for reward_signal in self.get_utilities_from_reflective(variable):
+                reward += cumulative_dict[max_key][1][reward_signal]
             new_cpd = self.nudge_cpt(
                 self.model.get_cpds(variable),
-                (cumulative_dict[max_key])[0],
-                variable,
-                int(value),
+                evidence,
                 self.alpha,
-                (cumulative_dict[max_key])[1],
+                reward,
             )
             self.model.remove_cpds(self.model.get_cpds(variable))
             self.model.add_cpds(new_cpd)
-            if i == 29 or i == 31 or i == 99:
-                cpts[i] = copy.deepcopy(self)
+            # if i == 29 or i == 31 or i == 99:
+            #     cpts[i] = copy.deepcopy(self)
         return cpts
 
     # Function to convert CPDs to DataFrame
@@ -496,30 +459,32 @@ rich_jock_student = Student(
     weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}),
 )
 
+# broke_academic_student.draw_model()
+
 # iter_model_x = x.train(1)
 # iter_model_y = y.train(1)
 
-brs = broke_academic_student.train(100)
-ras = rich_academic_student.train(100)
-bjs = broke_jock_student.train(100)
-rjs = rich_jock_student.train(100)
+# brs = broke_academic_student.train(100)
+# ras = rich_academic_student.train(100)
+# bjs = broke_jock_student.train(100)
+# rjs = rich_jock_student.train(100)
 
-for iter, student in brs.items():
-    broke_academic_student.write_cpds_to_csv(
-        student.get_cpts(), f"Trained for bas @ iteration {iter}"
-    )
-for iter, student in ras.items():
-    broke_academic_student.write_cpds_to_csv(
-        student.get_cpts(), f"Trained for ras @ iteration {iter}"
-    )
-for iter, student in bjs.items():
-    broke_academic_student.write_cpds_to_csv(
-        student.get_cpts(), f"Trained for bjs @ iteration {iter}"
-    )
-for iter, student in rjs.items():
-    broke_academic_student.write_cpds_to_csv(
-        student.get_cpts(), f"Trained for rjs @ iteration {iter}"
-    )
+# for iter, student in brs.items():
+#     broke_academic_student.write_cpds_to_csv(
+#         student.get_cpts(), f"Trained for bas @ iteration {iter}"
+#     )
+# for iter, student in ras.items():
+#     broke_academic_student.write_cpds_to_csv(
+#         student.get_cpts(), f"Trained for ras @ iteration {iter}"
+#     )
+# for iter, student in bjs.items():
+#     broke_academic_student.write_cpds_to_csv(
+#         student.get_cpts(), f"Trained for bjs @ iteration {iter}"
+#     )
+# for iter, student in rjs.items():
+#     broke_academic_student.write_cpds_to_csv(
+#         student.get_cpts(), f"Trained for rjs @ iteration {iter}"
+#     )
 # x.display_original_cpts()
 # x.display_var_cpt("Time studying")
 # x.display_var_cpt("ECs")
