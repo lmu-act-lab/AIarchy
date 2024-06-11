@@ -4,9 +4,13 @@ import numpy as np
 
 
 low_ses_student = Student(
-    {"SES": 0}, weights={"health": 0.25, "social": 0.15, "grades": 0.6}
+    {"SES": 0}, weights={"health": 0.33, "social": 0.33, "grades": 0.33}
 )
-low_ses_student.train(1)
+high_ses_student = Student(
+    {"SES": 2}, weights={"health": 0.33, "social": 0.33, "grades": 0.33}
+)
+high_ses_student.train(100)
+low_ses_student.train(100)
 
 
 def is_array_greater(arr1, arr2):
@@ -34,8 +38,11 @@ class TestTraining(unittest.TestCase):
             )
             # or True
         )
-        low_ses_student.display_original_cpts()
-        low_ses_student.display_cpts()
+        # low_ses_student.display_original_cpts()
+        # low_ses_student.display_cpts()
+        low_ses_student.plot_memory()
+        high_ses_student.plot_memory()
+
 
 
 if __name__ == "__main__":

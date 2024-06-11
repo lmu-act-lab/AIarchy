@@ -38,6 +38,7 @@ class Student:
             ]
         )
 
+        self.memory = []
         self.utility_vars: set[str] = {"grades", "social", "health"}
         self.reflective_vars: set[str] = {"Time studying", "Exercise", "Sleep", "ECs"}
         self.fixed_vars: set[str] = {"SES"}
@@ -60,12 +61,13 @@ class Student:
                 ("Exercise", "health"),
             ]
         )
+        self.structural_model.do(self.reflective_vars, True)
 
         self.sample_num = 100
         self.alpha = 0.01
 
         self.weights = (
-            util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45})
+            util.Counter({"grades": 0.0, "social": 0.0, "health": 0.0})
             if not weights
             else weights
         )
@@ -185,6 +187,11 @@ class Student:
 
     def get_original__var_cpt(self, var) -> list[TabularCPD]:
         return self.original_model.get_cpds(var)
+    
+    def display_memory(self):
+        for time_step in self.memory:
+            print(time_step)
+            print('\n')
 
     def display_cpts(self) -> None:
         for cpd in self.model.get_cpds():
@@ -225,6 +232,28 @@ class Student:
             arrowsize=20,
         )
         plt.title("Bayesian Network Structure")
+        plt.show()
+
+    def plot_memory(self):
+        plot_data = {}
+
+        for d in self.memory:
+            for key, value in d.items():
+                if key not in plot_data:
+                    plot_data[key] = []
+                plot_data[key].append(value)
+
+        # Plot each key as a separate line
+        for key, values in plot_data.items():
+            plt.plot(values, label=key)
+
+        # Add labels and a legend
+        plt.xlabel('Index')
+        plt.ylabel('Value')
+        plt.title('Line Graph for Each Key')
+        plt.legend()
+
+        # Show the plot
         plt.show()
 
     def reward(self, sample: dict[str, int]):
@@ -361,6 +390,8 @@ class Student:
         cpd.values = normalized_values
         return cpd
 
+    # def nudge_weights(self, weights, )
+
     def train(self, iterations: int):
         cpts = {}
         reward = 0
@@ -386,13 +417,16 @@ class Student:
                     )
 
             max_key = max(
-                cumulative_dict, key=lambda k: sum(cumulative_dict[k].values())
+                cumulative_dict, key=lambda k: sum(cumulative_dict[k][1].values())
             )
 
             if max_key == "no intervention":
                 continue
             variable, value = max_key.split(": ")
             evidence = cumulative_dict[max_key][0]
+            self.memory.append(cumulative_dict["no intervention"][1])
+
+
             for reward_signal in self.get_utilities_from_reflective(variable):
                 reward += cumulative_dict[max_key][1][reward_signal]
             new_cpd = self.nudge_cpt(
@@ -443,22 +477,22 @@ class Student:
             df.to_csv(f"data/{file_name}")
 
 
-broke_academic_student = Student(
-    fixed_evidence={"SES": 0},
-    weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
-)
-rich_academic_student = Student(
-    fixed_evidence={"SES": 2},
-    weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
-)
-broke_jock_student = Student(
-    fixed_evidence={"SES": 0},
-    weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}),
-)
-rich_jock_student = Student(
-    fixed_evidence={"SES": 2},
-    weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}),
-)
+# broke_academic_student = Student(
+#     fixed_evidence={"SES": 0},
+#     weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
+# )
+# rich_academic_student = Student(
+#     fixed_evidence={"SES": 2},
+#     weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
+# )
+# broke_jock_student = Student(
+#     fixed_evidence={"SES": 0},
+#     weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}),
+# )
+# rich_jock_student = Student(
+#     fixed_evidence={"SES": 2},
+#     weights=util.Counter({"grades": 0.15, "social": 0.4, "health": 0.45}),
+# )
 
 # broke_academic_student.draw_model()
 
