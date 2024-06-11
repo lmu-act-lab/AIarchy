@@ -386,8 +386,9 @@ class Student:
                     )
 
             max_key = max(
-                cumulative_dict, key=lambda x: sum((cumulative_dict[x][1]).values)
+                cumulative_dict, key=lambda k: sum(cumulative_dict[k].values())
             )
+
             if max_key == "no intervention":
                 continue
             variable, value = max_key.split(": ")
