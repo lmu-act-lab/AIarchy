@@ -187,11 +187,11 @@ class Student:
 
     def get_original__var_cpt(self, var) -> list[TabularCPD]:
         return self.original_model.get_cpds(var)
-    
+
     def display_memory(self):
         for time_step in self.memory:
             print(time_step)
-            print('\n')
+            print("\n")
 
     def display_cpts(self) -> None:
         for cpd in self.model.get_cpds():
@@ -248,9 +248,9 @@ class Student:
             plt.plot(values, label=key)
 
         # Add labels and a legend
-        plt.xlabel('Index')
-        plt.ylabel('Value')
-        plt.title('Line Graph for Each Key')
+        plt.xlabel("Index")
+        plt.ylabel("Value")
+        plt.title("Line Graph for Each Key")
         plt.legend()
 
         # Show the plot
@@ -426,7 +426,6 @@ class Student:
             evidence = cumulative_dict[max_key][0]
             self.memory.append(cumulative_dict["no intervention"][1])
 
-
             for reward_signal in self.get_utilities_from_reflective(variable):
                 reward += cumulative_dict[max_key][1][reward_signal]
             new_cpd = self.nudge_cpt(
@@ -460,21 +459,21 @@ class Student:
         )
         return delta_cpd
 
-    def write_cpds_to_csv(self, cpds, name):
+    def write_cpds_to_csv(self, cpds, name, folder):
         for cpd in cpds:
             if cpd.variable not in self.reflective_vars:
                 continue
             df = self.cpd_to_dataframe(cpd)
             file_name = f"{name}, {cpd.variable}.csv"
-            df.to_csv(f"data/{file_name}")
+            df.to_csv(f"{folder}/{file_name}")
 
-    def write_delta_cpd_to_csv(self, cpds, name):
+    def write_delta_cpd_to_csv(self, cpds, name, folder):
         for cpd in cpds:
             if cpd.variable not in self.reflective_vars:
                 continue
             df = self.cpd_to_dataframe(self.compute_cpd_delta(cpd.variable))
             file_name = f"Delta for {name}, {cpd.variable}.csv"
-            df.to_csv(f"data/{file_name}")
+            df.to_csv(f"{folder}/{file_name}")
 
 
 # broke_academic_student = Student(
