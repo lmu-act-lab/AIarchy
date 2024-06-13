@@ -9,8 +9,8 @@ low_ses_student = Student(
 high_ses_student = Student(
     {"SES": 2}, weights={"health": 0.33, "social": 0.33, "grades": 0.33}
 )
-high_ses_student.train(100)
-low_ses_student.train(100)
+high_ses_student.train(1000)
+low_ses_student.train(1000)
 
 
 def is_array_greater(arr1, arr2):
