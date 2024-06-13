@@ -38,7 +38,7 @@ class Student:
             ]
         )
 
-        self.memory = []
+        self.memory: list[dict[str, float]] = []
         self.utility_vars: set[str] = {"grades", "social", "health"}
         self.reflective_vars: set[str] = {"Time studying", "Exercise", "Sleep", "ECs"}
         self.fixed_vars: set[str] = {"SES"}
@@ -65,11 +65,13 @@ class Student:
 
         self.sample_num = 100
         self.alpha = 0.01
+        self.ema_alpha = 0.1
+        self.threshold = 0.05
+        self.downweigh_factor = 0.1
+        self.ema: dict[str, float] = {key: 1 for key in self.utility_vars}
 
-        self.weights = (
-            util.Counter({"grades": 0.0, "social": 0.0, "health": 0.0})
-            if not weights
-            else weights
+        self.weights = util.Counter(
+            {key: 1 / len(self.utility_vars) for key in self.utility_vars}
         )
 
         self.add_cpt(
@@ -174,7 +176,6 @@ class Student:
 
     def add_cpt(self, cpt: TabularCPD):
         self.model.add_cpds(cpt)
-        pass
 
     def get_cpts(self) -> list[TabularCPD]:
         return self.model.get_cpds()
@@ -401,11 +402,38 @@ class Student:
             #     self.model.get_cpds("Motivation").values[1] += 0.4
             #     self.model.get_cpds("Motivation").values[0] -= 0.4
             cumulative_dict = {}
+
+            utility_to_adjust = []
+            if i > 0:
+                for var, ema in self.ema.items():
+                    new_ema = (1 - self.ema_alpha) * ema + self.ema_alpha * self.memory[
+                        -1
+                    ][var]
+                    self.ema[var] = new_ema
+                    if new_ema < self.threshold:
+                        utility_to_adjust.append(var)
+
             cumulative_dict["no intervention"] = self.time_step(
                 self.fixed_assignment,
                 self.weights,
                 self.sample_num,
             )
+
+            # if utility_to_adjust:
+            utility_to_weights: dict[str, dict[str, float]] = {}
+            for var in utility_to_adjust:
+                new_weights = copy.deepcopy(self.weights)
+                new_weights[var] *= self.downweigh_factor
+                new_weights = {
+                    key: value / sum(new_weights.values())
+                    for key, value in new_weights.items()
+                }
+                utility_to_weights[var] = new_weights
+                cumulative_dict[f"{var} weight change"] = self.time_step(
+                    self.fixed_assignment,
+                    new_weights,
+                    self.sample_num,
+                )
 
             for var, card in self.card_dict.items():
                 for val in range(card):
@@ -422,6 +450,7 @@ class Student:
 
             if max_key == "no intervention":
                 continue
+
             variable, value = max_key.split(": ")
             evidence = cumulative_dict[max_key][0]
             self.memory.append(cumulative_dict["no intervention"][1])
