@@ -73,6 +73,7 @@ class Student:
         self.weights = util.Counter(
             {key: 1 / len(self.utility_vars) for key in self.utility_vars}
         )
+        self.weight_history = {}
 
         self.add_cpt(
             TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]])
@@ -192,6 +193,12 @@ class Student:
     def display_memory(self):
         for time_step in self.memory:
             print(time_step)
+            print("\n")
+    
+    def display_weights(self):
+        for time_step, weights in self.weight_history.items():
+            print(f"Iteration {time_step}:")
+            print(weights)
             print("\n")
 
     def display_cpts(self) -> None:
@@ -429,7 +436,7 @@ class Student:
                     for key, value in new_weights.items()
                 }
                 utility_to_weights[var] = new_weights
-                cumulative_dict[f"{var} weight change"] = self.time_step(
+                cumulative_dict[f"{var}- weight change"] = self.time_step(
                     self.fixed_assignment,
                     new_weights,
                     self.sample_num,
@@ -449,6 +456,12 @@ class Student:
             )
 
             if max_key == "no intervention":
+                continue
+
+            if "weight change" in max_key:
+                variable, weight_str = max_key.split("-")[0]
+                self.weights = utility_to_weights[variable]
+                self.weight_history[i] = self.weights
                 continue
 
             variable, value = max_key.split(": ")
@@ -505,10 +518,11 @@ class Student:
             df.to_csv(f"{folder}/{file_name}")
 
 
-# broke_academic_student = Student(
-#     fixed_evidence={"SES": 0},
-#     weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
-# )
+broke_academic_student = Student(
+    fixed_evidence={"SES": 0},
+    weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
+)
+print(broke_academic_student.weights)
 # rich_academic_student = Student(
 #     fixed_evidence={"SES": 2},
 #     weights=util.Counter({"grades": 0.6, "social": 0.15, "health": 0.25}),
@@ -605,3 +619,9 @@ class Student:
 # rich_jock_student.write_delta_cpd_to_csv(
 #     rich_jock_student.get_cpts(), "Trained for Rich Jock Student"
 # )
+
+
+#TO DO:
+# 1. Refactor Code
+# 2. More robust unit tests
+    # a. Test that the weights are being adjusted correctly

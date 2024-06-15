@@ -43,17 +43,19 @@ class TestTraining(unittest.TestCase):
         low_ses_student.plot_memory()
         high_ses_student.plot_memory()
         low_ses_student.write_cpds_to_csv(
-            low_ses_student.get_cpts(), "trained low_ses", "data_1000_iter"
+            low_ses_student.get_cpts(), "trained low_ses", "weight_changing"
         )
         low_ses_student.write_delta_cpd_to_csv(
-            low_ses_student.get_cpts(), "delta low_ses", "data_1000_iter"
+            low_ses_student.get_cpts(), "delta low_ses", "weight_changing"
         )
         high_ses_student.write_cpds_to_csv(
-            high_ses_student.get_cpts(), "trained high_ses", "data_1000_iter"
+            high_ses_student.get_cpts(), "trained high_ses", "weight_changing"
         )
         high_ses_student.write_delta_cpd_to_csv(
-            high_ses_student.get_cpts(), "delta high_ses", "data_1000_iter"
+            high_ses_student.get_cpts(), "delta high_ses", "weight_changing"
         )
+        low_ses_student.display_weights()
+        high_ses_student.display_weights()
 
 
 if __name__ == "__main__":
