@@ -7,6 +7,7 @@ import copy
 from typing import Callable
 from util import *
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
+from pgmpy.factors.discrete import DiscreteFactor
 from pgmpy.models import BayesianNetwork  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
 
@@ -33,22 +34,40 @@ class CausalLearningAgent:
         """
         Initializes two Bayesian Networks, one for sampling and one to maintain structure. Also initializes a number of other variables to be used in the learning process.
 
-        Args:
-            sampling_edges (list[tuple[str, str]]): edges of the network to be used in the sampling model.
-            structural_edges (list[tuple[str, str]]): edges for the reward signals/utility vars (don't repeat the ones in sampling_edges).
-            cpts (list[TabularCPD]): cpts for the sampling model.
-            utility_vars (set[str]): utility nodes/reward signals.
-            reflective_vars (set[str]): vars agent can intervene on.
-            chance_vars (set[str]): vars that the agent cannot control.
-            glue_vars (set[str]): vars that will change from greater hierarchies.
-            fixed_evidence (dict[str, int], optional): any fixed evidence for that particular agent. Defaults to {}.
-            weights (dict[str, float], optional): any starting weights for archetype of agent (len must match how many utility vars there are). Defaults to {}.
-            threshold (float, optional): threshold for EMA used in downweighing weights over time. Defaults to 0.1.
-            downweigh_factor (float, optional): amount to downweigh weights by. Defaults to 0.8.
-            sample_num (int, optional): number of samples taken for one time step. Defaults to 100.
-            alpha (float, optional): learning rate. Defaults to 0.01.
-            ema_alpha (float, optional): ema adjustment rate. Defaults to 0.1.
+        Parameters
+        ----------
+        sampling_edges : list[tuple[str, str]]
+            edges of the network to be used in the sampling model.
+        structural_edges : list[tuple[str, str]]
+            edges for the reward signals/utility vars (don't repeat the ones in sampling_edges).
+        cpts : list[TabularCPD]
+            CPTs for the sampling model.
+        utility_vars : set[str]
+            utility nodes/reward signals.
+        reflective_vars : set[str]
+            vars agent can intervene on.
+        chance_vars : set[str]
+            vars that the agent cannot control.
+        glue_vars : set[str]
+            vars that will be affected by agents from greater hierarchies.
+        reward_func : Callable[[dict[str, int]], dict[str, float]]
+            reward function for the agent.
+        fixed_evidence : dict[str, int], optional
+             any fixed evidence for that particular agent, by default {}
+        weights : dict[str, float], optional
+            any starting weights for archetype of agent (len must match how many utility vars there are), by default {}
+        threshold : float, optional
+            any starting weights for archetype of agent (len must match how many utility vars there are), by default 0.1
+        downweigh_factor : float, optional
+            amount to downweigh weights by, by default 0.8
+        sample_num : int, optional
+            number of samples taken for one time step, by default 100
+        alpha : float, optional
+            learning rate, by default 0.01
+        ema_alpha : float, optional
+            ema adjustment rate, by default 0.1
         """
+
         self.sampling_model: BayesianNetwork = BayesianNetwork(sampling_edges)
 
         self.memory: list[dict[str, float]] = []
@@ -56,6 +75,7 @@ class CausalLearningAgent:
         self.reflective_vars: set[str] = reflective_vars
         self.chance_vars: set[str] = chance_vars
         self.glue_vars: set[str] = glue_vars
+        self.non_utility_vars: set[str] = reflective_vars | chance_vars | glue_vars
         self.fixed_assignment: dict[str, int] = {}
 
         self.structural_model: BayesianNetwork = BayesianNetwork(
@@ -63,7 +83,9 @@ class CausalLearningAgent:
         )
         self.structural_model.add_nodes_from(self.utility_vars)
         self.structural_model.add_edges_from(structural_edges)
-        self.structural_model.do(self.reflective_vars, True)
+
+        self.reward_attr_model = self.structural_model.do(self.reflective_vars)
+        self.inference_model = self.structural_model.do(self.non_utility_vars)
 
         self.sample_num: int = sample_num
         self.alpha: float = alpha
@@ -94,8 +116,10 @@ class CausalLearningAgent:
         """
         Returns the CPDs of the sampling model.
 
-        Returns:
-            list[TabularCPD]: List of CPDs.
+        Returns
+        -------
+        list[TabularCPD]
+            List of CPDs.
         """
         return self.sampling_model.get_cpds()
 
@@ -103,20 +127,26 @@ class CausalLearningAgent:
         """
         Returns the CPDs of the original model.
 
-        Returns:
-            list[TabularCPD]: List of CPDs.
+        Returns
+        -------
+        list[TabularCPD]
+            List of CPDs.
         """
         return self.original_model.get_cpds()
 
     def get_var_cpt(self, var: str) -> list[TabularCPD]:
         """
-        Returns the CPDs of a particular variable.
+        Returns the CPDs of a particular variable in the sampling model.
 
-        Args:
-            var (str): The variable to get the CPD of.
+        Parameters
+        ----------
+        var : str
+            Variable to get the CPD of.
 
-        Returns:
-            list[TabularCPD]: List of CPDs.
+        Returns
+        -------
+        list[TabularCPD]
+            List of CPDs.
         """
         return self.sampling_model.get_cpds(var)
 
@@ -124,17 +154,21 @@ class CausalLearningAgent:
         """
         Returns the CPDs of a particular variable in the original model.
 
-        Args:
-            var (str): The variable to get the CPD of.
+        Parameters
+        ----------
+        var : str
+            Variable to get the CPD of.
 
-        Returns:
-            list[TabularCPD]: List of CPDs.
+        Returns
+        -------
+        list[TabularCPD]
+            List of CPDs.
         """
         return self.original_model.get_cpds(var)
 
     def display_memory(self) -> None:
         """
-        Displays the memory of the agent.
+        Displays the memory of the agent
         """
         for time_step in self.memory:
             print(time_step)
@@ -160,10 +194,12 @@ class CausalLearningAgent:
 
     def display_var_cpt(self, var: str) -> None:
         """
-        Displays the CPD of a particular variable.
+        Displays the CPDs of a particular variable in the sampling model.
 
-        Args:
-            var (str): The variable to display the CPD of.
+        Parameters
+        ----------
+        var : str
+            Variable to display the CPD of.
         """
         for cpd in self.sampling_model.get_cpds():
             if cpd.variable == var:
@@ -260,5 +296,93 @@ class CausalLearningAgent:
         sample: dict[str, int],
         rewards: dict[str, float],
     ) -> dict[str, float]:
-        
+        """
+        Calculates expected reward given a sample and its associated reward.
+
+        Parameters
+        ----------
+        sample : dict[str, int]
+            sample associated with reward
+        rewards : dict[str, float]
+            weighted reward received from sample
+
+        Returns
+        -------
+        dict[str, float]
+            expected reward given sample & structure
+        """
+
+        inference: CausalInference = CausalInference(self.structural_model)
+        rewards_queries: dict[str, list[str]] = {}
+        reward_probs: dict[str, DiscreteFactor] = {}
+        expected_rewards: dict[str, float] = {}
+        for category in rewards.keys():
+            reward_query: list[str] = []
+            for var in self.non_utility_vars:
+                if self.inference_model.is_dconnected(var, category):
+                    reward_query.append(var)
+            rewards_queries[category] = reward_query
+
+        for category, connected_vars in rewards_queries.items():
+            reward_probs[category] = inference.query(
+                variables=connected_vars,
+                evidence={
+                    var: ass for var, ass in sample.items() if var not in connected_vars
+                },
+            )
+
+        for category, reward in rewards.items():
+            assignment = {var: sample[var] for var in rewards_queries[category]}
+            expected_rewards[category] += reward * reward_probs[category].get_value(
+                **assignment
+            )
+
+        return expected_rewards
+
+    def get_cpt_vals(self, variable: str, value: int) -> float:
+        """
+        Get the value of an assigned variable in the updated CPT
+
+        Parameters
+        ----------
+        variable : str
+            Variable to assign value to.
+        value : int
+            Value to assign variable.
+
+        Returns
+        -------
+        float
+            Prob. value associated with assignment.
+        """
+        cpd: TabularCPD = self.model.get_cpds(variable)
+        return cpd.values[value]
+
+    def get_original_cpt_vals(self, variable: str, value: int) -> float:
+        """
+        Get the value of an assigned variable in the original CPT
+
+        Parameters
+        ----------
+        variable : str
+            Variable to assign value to.
+        value : int
+            Value to assign variable.
+
+        Returns
+        -------
+        float
+            Prob. value associated with assignment.
+        """
+        cpd: TabularCPD = self.original_model.get_cpds(variable)
+        return cpd.values[value]
+
+    def time_step(
+        self,
+        fixed_evidence: dict[str, int],
+        weights: dict[str, float],
+        samples: int,
+        do: dict[str, int] = {},
+    ) -> tuple[dict[str, int | float], dict[str, int | float]]:
+        # todo: add custom object as return type for time_step
         pass
