@@ -13,6 +13,7 @@ from pgmpy.inference import CausalInference  # type: ignore
 
 
 class CausalLearningAgent:
+
     def __init__(
         self,
         sampling_edges: list[tuple[str, str]],
@@ -316,6 +317,7 @@ class CausalLearningAgent:
         rewards_queries: dict[str, list[str]] = {}
         reward_probs: dict[str, DiscreteFactor] = {}
         expected_rewards: dict[str, float] = {}
+
         for category in rewards.keys():
             reward_query: list[str] = []
             for var in self.non_utility_vars:
@@ -383,6 +385,66 @@ class CausalLearningAgent:
         weights: dict[str, float],
         samples: int,
         do: dict[str, int] = {},
-    ) -> tuple[dict[str, int | float], dict[str, int | float]]:
+    ) -> "TimeStep":
+        memory = pd.DataFrame(columns=list(self.utility_vars | self.non_utility_vars))
         # todo: add custom object as return type for time_step
-        pass
+        for _ in range(samples):
+            weighted_reward: dict[str, float] = {}
+            if do:
+                sample_df = self.sampling_model.simulate(
+                    n_samples=1,
+                    evidence=fixed_evidence,
+                    do=do,
+                )
+            else:
+                sample_df = self.sampling_model.simulate(
+                    n_samples=1, evidence=fixed_evidence
+                )
+            sample_dict: dict[str, int] = sample_df.iloc[0].to_dict()
+            rewards: dict[str, float] = self.reward_func(sample_dict)
+            for var, weight in weights.items():
+                weighted_reward[var] = rewards[var] * weight
+            memory = memory.append(
+                {
+                    **sample_dict,
+                    **self.calculate_expected_reward(sample_dict, weighted_reward),
+                },
+                ignore_index=True,
+            )
+        return TimeStep(memory, self.non_utility_vars)
+
+class TimeStep:
+    def __init__(
+        self,
+        memory: pd.DataFrame,
+        sample_vars: set[str],
+    ):
+        self.memory: pd.DataFrame = memory
+        self.average_sample: dict[str, float] = {}
+
+        for var in sample_vars:
+            self.average_sample[var] = self.get_column_average(var)
+
+    def get_column_average(self, column_name: str) -> float:
+        """
+        Calculate and round the average of a specified column in the memory DataFrame.
+
+        Parameters
+        ----------
+        column_name : str
+            The name of the column to calculate the average for.
+        decimal_places : int, optional
+            The number of decimal places to round the average to, by default 2.
+
+        Returns
+        -------
+        float
+            The rounded average value of the specified column.
+        """
+        average = self.memory[column_name].mean()
+        return round(average)
+
+
+#! future research
+# * look into bayesian structure learning from data
+# *
