@@ -386,7 +386,7 @@ class CausalLearningAgent:
         samples: int,
         do: dict[str, int] = {},
     ) -> "TimeStep":
-        memory = pd.DataFrame(columns=list(self.utility_vars | self.non_utility_vars))
+        memory: pd.DataFrame = pd.DataFrame(columns=list(self.utility_vars | self.non_utility_vars))
         # todo: add custom object as return type for time_step
         for _ in range(samples):
             weighted_reward: dict[str, float] = {}
@@ -412,6 +412,38 @@ class CausalLearningAgent:
                 ignore_index=True,
             )
         return TimeStep(memory, self.non_utility_vars)
+    
+    def nudge_cpt(self, cpd, evidence, increase_factor, reward) -> TabularCPD:
+        values: list = cpd.values
+        indices: list[int] = [evidence[variable] for variable in cpd.variables]
+        # Convert indices to tuple to use for array indexing
+        tuple_indices: tuple[int] = tuple(indices)
+        # Update the value at the specified indices
+        values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+
+        # Normalize the probabilities to ensure they sum to 1
+        sum_values: list = np.sum(values, axis=0)
+        normalized_values: list = values / sum_values
+
+        # Update the CPD with normalized values
+        cpd.values = normalized_values
+        return cpd
+    
+    def train(self, iterations: int) -> None:
+        # 1. do ema check to see eligible weights if any
+        # 2. pick a reflective var / eligible weight @ random
+        #   A. pick a condition e.g. x_2 = 0, x_3 = 1
+        #   B. pick a direction to tweak e.g. p(x_1 = 0| x_2 = 0, x_3 = 1) +- alpha
+        #   AB_viv. pick a reflective var direction to perform intervention e.g. do(x_1 = 0)
+        #   C. If 2B is a sideways/upwards move then commit the tweak by 
+        #      getting the average sample and only attributing the rewards
+        #      that adhere to the average sample
+        #      Else if downwards move then only commit if some coinflip:
+        #      RNG <= e^(-|delta|/T) where T is the temperature
+        #      where delta is the difference between the new and old reward
+        # 3. cooling schedule reduce T by some factor
+        # 4. repeat until iterations reached
+
 
 class TimeStep:
     def __init__(
