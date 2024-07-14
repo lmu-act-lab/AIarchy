@@ -386,7 +386,9 @@ class CausalLearningAgent:
         samples: int,
         do: dict[str, int] = {},
     ) -> "TimeStep":
-        memory: pd.DataFrame = pd.DataFrame(columns=list(self.utility_vars | self.non_utility_vars))
+        memory: pd.DataFrame = pd.DataFrame(
+            columns=list(self.utility_vars | self.non_utility_vars)
+        )
         # todo: add custom object as return type for time_step
         for _ in range(samples):
             weighted_reward: dict[str, float] = {}
@@ -412,7 +414,7 @@ class CausalLearningAgent:
                 ignore_index=True,
             )
         return TimeStep(memory, self.non_utility_vars)
-    
+
     def nudge_cpt(self, cpd, evidence, increase_factor, reward) -> TabularCPD:
         values: list = cpd.values
         indices: list[int] = [evidence[variable] for variable in cpd.variables]
@@ -428,14 +430,34 @@ class CausalLearningAgent:
         # Update the CPD with normalized values
         cpd.values = normalized_values
         return cpd
-    
+
     def train(self, iterations: int) -> None:
+        for _ in range(iterations):
+            utility_to_adjust: set[str] = set()
+            if _ > 0:
+                for var, ema in self.ema.items():
+                    new_ema = (1 - self.ema_alpha) * (
+                        ema + self.ema_alpha * self.memory[-1][var]
+                    )
+                    self.ema[var] = new_ema
+                    if new_ema < self.threshold:
+                        utility_to_adjust.add(var)
+
+            tweak: str = random.choice(list(utility_to_adjust | self.reflective_vars))
+            if tweak in utility_to_adjust:
+                # perform weight change intervention
+                # compare reward with no intervention
+                pass
+            else:
+                # perform reflective var intervention
+                # compare reward with no intervention
+                pass
         # 1. do ema check to see eligible weights if any
         # 2. pick a reflective var / eligible weight @ random
         #   A. pick a condition e.g. x_2 = 0, x_3 = 1
         #   B. pick a direction to tweak e.g. p(x_1 = 0| x_2 = 0, x_3 = 1) +- alpha
         #   AB_viv. pick a reflective var direction to perform intervention e.g. do(x_1 = 0)
-        #   C. If 2B is a sideways/upwards move then commit the tweak by 
+        #   C. If 2B is a sideways/upwards move then commit the tweak by
         #      getting the average sample and only attributing the rewards
         #      that adhere to the average sample
         #      Else if downwards move then only commit if some coinflip:
