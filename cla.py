@@ -27,6 +27,7 @@ class CausalLearningAgent:
         fixed_evidence: dict[str, int] = {},
         weights: dict[str, float] = {},
         threshold: float = 0.1,
+        temperature: float = 1,
         downweigh_factor: float = 0.8,
         sample_num: int = 100,
         alpha: float = 0.01,
@@ -59,6 +60,8 @@ class CausalLearningAgent:
             any starting weights for archetype of agent (len must match how many utility vars there are), by default {}
         threshold : float, optional
             any starting weights for archetype of agent (len must match how many utility vars there are), by default 0.1
+        temperature : float, optional
+            temperature for simulated annealing, by default 1
         downweigh_factor : float, optional
             amount to downweigh weights by, by default 0.8
         sample_num : int, optional
@@ -92,6 +95,7 @@ class CausalLearningAgent:
         self.alpha: float = alpha
         self.ema_alpha: float = ema_alpha
         self.threshold: float = threshold
+        self.temperature: float = temperature
         self.downweigh_factor: float = downweigh_factor
         self.ema: dict[str, float] = {key: 1 for key in self.utility_vars}
         if not weights:
@@ -412,6 +416,24 @@ class CausalLearningAgent:
         return TimeStep(memory, self.non_utility_vars, self.utility_vars)
 
     def nudge_cpt(self, cpd, evidence, increase_factor, reward) -> TabularCPD:
+        """_summary_
+
+        Parameters
+        ----------
+        cpd : _type_
+            _description_
+        evidence : _type_
+            _description_
+        increase_factor : _type_
+            _description_
+        reward : _type_
+            _description_
+
+        Returns
+        -------
+        TabularCPD
+            _description_
+        """
         values: list = cpd.values
         indices: list[int] = [evidence[variable] for variable in cpd.variables]
 
@@ -426,7 +448,13 @@ class CausalLearningAgent:
         return cpd
 
     def train(self, iterations: int) -> None:
-        
+        """_summary_
+
+        Parameters
+        ----------
+        iterations : int
+            _description_
+        """
         for _ in range(iterations):
             utility_to_adjust: set[str] = set()
             if _ > 0:
@@ -453,16 +481,15 @@ class CausalLearningAgent:
                     self.fixed_assignment, adjusted_weights, self.sample_num
                 )
 
-                if sum(adjusted_time_step.average_reward.values()) >= sum(
+                delta: float = sum(adjusted_time_step.average_reward.values()) - sum(
                     normal_time_step.average_reward.values()
+                )
+
+                if delta >= 0 or random.random() <= np.exp(
+                    -abs(delta) / self.temperature
                 ):
-                    self.weights = adjusted_weights
                     self.memory.append(adjusted_time_step)
-                else:
-                    # Else if downwards move then only commit if some coinflip:
-                    # RNG <= e^(-|delta|/T) where T is the temperature
-                    # where delta is the difference between the new and old reward
-                    pass
+                    self.weights = adjusted_weights
             else:
                 true_reward: float = 0
                 random_assignment: int = random.randint(
@@ -478,9 +505,12 @@ class CausalLearningAgent:
                     self.sample_num,
                     {tweak_var: random_assignment},
                 )
-
-                if sum(interventional_time_step.average_reward.values()) >= sum(
+                delta = sum(interventional_time_step.average_reward.values()) - sum(
                     normal_time_step.average_reward.values()
+                )
+
+                if delta >= 0 or random.random() <= np.exp(
+                    -abs(delta) / self.temperature
                 ):
                     self.memory.append(interventional_time_step)
                     filtered_df: pd.DataFrame = interventional_time_step.memory
@@ -498,30 +528,22 @@ class CausalLearningAgent:
                         self.sampling_model.get_cpds(tweak_var)
                     )
                     self.sampling_model.add_cpds(adjusted_cpt)
-                else:
-                    # Else if downwards move then only commit if some coinflip:
-                    # RNG <= e^(-|delta|/T) where T is the temperature
-                    # where delta is the difference between the new and old reward
-                    pass
 
-                # 3. cooling schedule reduce T by some factor
-                # 4. repeat until iterations reached
-                pass
-        # 1. do ema check to see eligible weights if any
-        # 2. pick a reflective var / eligible weight @ random
-        #   A. pick a condition e.g. x_2 = 0, x_3 = 1
-        #   B. pick a direction to tweak e.g. p(x_1 = 0| x_2 = 0, x_3 = 1) +- alpha
-        #   AB_viv. pick a reflective var direction to perform intervention e.g. do(x_1 = 0)
-        #   C. If 2B is a sideways/upwards move then commit the tweak by
-        #      getting the average sample and only attributing the rewards
-        #      that adhere to the average sample
-        #      Else if downwards move then only commit if some coinflip:
-        #      RNG <= e^(-|delta|/T) where T is the temperature
-        #      where delta is the difference between the new and old reward
-        # 3. cooling schedule reduce T by some factor
-        # 4. repeat until iterations reached
+                self.temperature *= 0.99
 
     def get_utilities_from_reflective(self, reflective_var: str) -> list[str]:
+        """_summary_
+
+        Parameters
+        ----------
+        reflective_var : str
+            _description_
+
+        Returns
+        -------
+        list[str]
+            _description_
+        """
         dependent_utility_vars: list[str] = []
         for utility in self.utility_vars:
             if self.structural_model.is_dconnected(reflective_var, utility):
@@ -533,6 +555,17 @@ class TimeStep:
     def __init__(
         self, memory: pd.DataFrame, sample_vars: set[str], reward_vars: set[str]
     ):
+        """_summary_
+
+        Parameters
+        ----------
+        memory : pd.DataFrame
+            _description_
+        sample_vars : set[str]
+            _description_
+        reward_vars : set[str]
+            _description_
+        """
         self.memory: pd.DataFrame = memory
         self.average_sample: dict[str, int] = {}
         self.average_reward: dict[str, float] = {}
