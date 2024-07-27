@@ -1,4 +1,5 @@
 import pandas as pd
+from pandas import DataFrame
 import numpy as np
 import warnings
 import matplotlib.pyplot as plt
@@ -223,11 +224,9 @@ class CausalLearningAgent:
         """
         Draws the structural model of the agent.
         """
-        # Initialize the graph
         G = nx.DiGraph()
         G.add_edges_from(self.structural_model.edges())
 
-        # Define colors for each type of variable
         color_map = {
             "reflective": "blue",
             "glue": "green",
@@ -235,10 +234,8 @@ class CausalLearningAgent:
             "utility": "yellow",
         }
 
-        # Initialize a list to hold edge colors
         edge_colors = []
 
-        # Determine the color of each edge based on the variable type
         for edge in G.edges():
             source, target = edge
             if target in self.reflective_vars:
@@ -250,10 +247,9 @@ class CausalLearningAgent:
             elif target in self.utility_vars:
                 edge_colors.append(color_map["utility"])
             else:
-                edge_colors.append("black")  # Default color
+                edge_colors.append("black")
 
-        # Draw the graph
-        pos = nx.spring_layout(G)  # Positions for all nodes
+        pos = nx.spring_layout(G)
         nx.draw(
             G,
             pos,
@@ -266,7 +262,6 @@ class CausalLearningAgent:
             font_weight="bold",
         )
 
-        # Display the plot
         plt.show()
 
     def plot_memory(self) -> None:
@@ -281,17 +276,14 @@ class CausalLearningAgent:
                     plot_data[key] = []
                 plot_data[key].append(value)
 
-        # Plot each key as a separate line
         for key, values in plot_data.items():
             plt.plot(values, label=key)
 
-        # Add labels and a legend
         plt.xlabel("Iteration")
         plt.ylabel("Perceived Reward")
         plt.title("Perceived reward at iteration t")
         plt.legend()
 
-        # Show the plot
         plt.show()
 
     def calculate_expected_reward(
@@ -388,8 +380,7 @@ class CausalLearningAgent:
         samples: int,
         do: dict[str, int] = {},
     ) -> "TimeStep":
-        memory: pd.DataFrame = pd.DataFrame(columns=list(self.structural_model.nodes()))
-        # todo: add custom object as return type for time_step
+        memory = pd.DataFrame(columns=list(self.structural_model.nodes()))
         for _ in range(samples):
             weighted_reward: dict[str, float] = {}
             if do:
@@ -406,38 +397,42 @@ class CausalLearningAgent:
             rewards: dict[str, float] = self.reward_func(sample_dict)
             for var, weight in weights.items():
                 weighted_reward[var] = rewards[var] * weight
-            memory = memory.append(
-                {
-                    **sample_dict,
-                    **self.calculate_expected_reward(sample_dict, weighted_reward),
-                },
-                ignore_index=True,
+            combined_dict: pd.DataFrame = pd.DataFrame(
+                [{**sample_dict, **weighted_reward}]
             )
+            memory = pd.concat([memory, combined_dict], ignore_index=True)
         return TimeStep(memory, self.non_utility_vars, self.utility_vars)
 
-    def nudge_cpt(self, cpd, evidence, increase_factor, reward) -> TabularCPD:
-        """_summary_
+    def nudge_cpt(
+        self,
+        cpd: TabularCPD,
+        evidence: dict[str, int],
+        increase_factor: float,
+        reward: float,
+    ) -> TabularCPD:
+        """
+        Nudges specific value in CPT.
 
         Parameters
         ----------
-        cpd : _type_
-            _description_
-        evidence : _type_
-            _description_
-        increase_factor : _type_
-            _description_
-        reward : _type_
-            _description_
+        cpd : TabularCPD
+            Structure representing the CPT.
+        evidence : dict[str, int]
+            Evidence of value to be nudged.
+        increase_factor : float
+            How much to nudge value.
+        reward : float
+            Reward signal to nudge value by.
 
         Returns
         -------
         TabularCPD
-            _description_
+            New CPT with nudged value.
         """
-        values: list = cpd.values
+        values: np.ndarray = cpd.values
         indices: list[int] = [evidence[variable] for variable in cpd.variables]
 
-        tuple_indices: tuple[int] = tuple(indices)
+        tuple_indices: tuple[int, ...] = tuple(indices)
 
         values[tuple_indices] += values[tuple_indices] * increase_factor * reward
 
@@ -448,12 +443,13 @@ class CausalLearningAgent:
         return cpd
 
     def train(self, iterations: int) -> None:
-        """_summary_
+        """
+        Train the agent for a specified number of iterations.
 
         Parameters
         ----------
         iterations : int
-            _description_
+            Number of iterations to train the agent for.
         """
         for _ in range(iterations):
             utility_to_adjust: set[str] = set()
@@ -532,17 +528,18 @@ class CausalLearningAgent:
                 self.temperature *= 0.99
 
     def get_utilities_from_reflective(self, reflective_var: str) -> list[str]:
-        """_summary_
+        """
+        Get all utility variables that are d-connected to a reflective variable.
 
         Parameters
         ----------
         reflective_var : str
-            _description_
+            Reflective variable to find dependent utility variables for.
 
         Returns
         -------
         list[str]
-            _description_
+            Dependent utility variables.
         """
         dependent_utility_vars: list[str] = []
         for utility in self.utility_vars:
@@ -550,21 +547,114 @@ class CausalLearningAgent:
                 dependent_utility_vars.append(utility)
         return dependent_utility_vars
 
+    def cpd_to_dataframe(self, cpd: TabularCPD) -> pd.DataFrame:
+        """
+        Convert a CPD to a DataFrame.
+
+        Parameters
+        ----------
+        cpd : TabularCPD
+            The CPD to convert.
+
+        Returns
+        -------
+        pd.DataFrame
+            The CPD as a DataFrame.
+        """
+        levels: list[range] = [range(card) for card in cpd.cardinality]
+        index: pd.MultiIndex = pd.MultiIndex.from_product(levels, names=cpd.variables)
+
+        df: pd.DataFrame = pd.DataFrame(
+            cpd.values.flatten(), index=index, columns=["Delta"]
+        )
+        return df
+
+    def compute_cpd_delta(self, var: str) -> DiscreteFactor:
+        """
+        Compute the delta of a CPD compared to the original model.
+
+        Parameters
+        ----------
+        var : str
+            Variable to compute the delta for.
+
+        Returns
+        -------
+        DiscreteFactor
+            The CPD with the delta values.
+        """
+        var_cpd: TabularCPD = self.sampling_model.get_cpds(var)
+        delta_values: np.ndarray = (
+            var_cpd.values - self.original_model.get_cpds(var).values
+        )
+        delta_cpd: DiscreteFactor = DiscreteFactor(
+            variables=var_cpd.variables,
+            cardinality=var_cpd.cardinality,
+            values=delta_values,
+        )
+        return delta_cpd
+
+    def write_cpds_to_csv(self, cpds: DiscreteFactor, name: str, folder: str) -> None:
+        """
+        Write CPDs to a CSV file.
+
+        Parameters
+        ----------
+        cpds : DiscreteFactor
+            CPDs to write to a CSV file
+        name : str
+            Name of the file.
+        folder : str
+            Folder to save the file in.
+        """
+        for cpd in cpds:
+            if cpd.variable not in self.reflective_vars:
+                continue
+            df: pd.DataFrame = self.cpd_to_dataframe(cpd)
+            file_name: str = f"{name}, {cpd.variable}.csv"
+            df.to_csv(f"{folder}/{file_name}")
+
+    def write_delta_cpd_to_csv(
+        self, cpds: DiscreteFactor, name: str, folder: str
+    ) -> None:
+        """
+        Write the delta of CPDs to a CSV file.
+
+        Parameters
+        ----------
+        cpds : DiscreteFactor
+            CPDs to write to a CSV file
+        name : str
+            Name of the file.
+        folder : str
+            The folder to save the file in.
+        """
+        for cpd in cpds:
+            if cpd.variable not in self.reflective_vars:
+                continue
+            df: pd.DataFrame = self.cpd_to_dataframe(
+                self.compute_cpd_delta(cpd.variable)
+            )
+            file_name: str = f"Delta for {name}, {cpd.variable}.csv"
+            df.to_csv(f"{folder}/{file_name}")
+
 
 class TimeStep:
     def __init__(
         self, memory: pd.DataFrame, sample_vars: set[str], reward_vars: set[str]
     ):
-        """_summary_
+        """
+        Custom Timestep class that holds memory, average sample values,
+        and average reward values for that timestep.
 
         Parameters
         ----------
         memory : pd.DataFrame
-            _description_
+            All samples and rewards for that timestep.
         sample_vars : set[str]
-            _description_
+            Sample variables.
         reward_vars : set[str]
-            _description_
+            Utility/reward variables.
         """
         self.memory: pd.DataFrame = memory
         self.average_sample: dict[str, int] = {}
