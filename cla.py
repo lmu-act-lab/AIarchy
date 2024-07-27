@@ -40,37 +40,37 @@ class CausalLearningAgent:
         Parameters
         ----------
         sampling_edges : list[tuple[str, str]]
-            edges of the network to be used in the sampling model.
+            Edges of the network to be used in the sampling model.
         structural_edges : list[tuple[str, str]]
-            edges for the reward signals/utility vars (don't repeat the ones in sampling_edges).
+            Edges for the reward signals/utility vars (don't repeat the ones in sampling_edges).
         cpts : list[TabularCPD]
             CPTs for the sampling model.
         utility_vars : set[str]
-            utility nodes/reward signals.
+            Utility nodes/reward signals.
         reflective_vars : set[str]
-            vars agent can intervene on.
+            Vars agent can intervene on.
         chance_vars : set[str]
-            vars that the agent cannot control.
+            Vars that the agent cannot control.
         glue_vars : set[str]
-            vars that will be affected by agents from greater hierarchies.
+            Vars that will be affected by agents from greater hierarchies.
         reward_func : Callable[[dict[str, int]], dict[str, float]]
-            reward function for the agent.
+            Reward function for the agent.
         fixed_evidence : dict[str, int], optional
-             any fixed evidence for that particular agent, by default {}
+            Any fixed evidence for that particular agent, by default {}
         weights : dict[str, float], optional
-            any starting weights for archetype of agent (len must match how many utility vars there are), by default {}
+            Any starting weights for archetype of agent (len must match how many utility vars there are), by default {}
         threshold : float, optional
-            any starting weights for archetype of agent (len must match how many utility vars there are), by default 0.1
+            Any starting weights for archetype of agent (len must match how many utility vars there are), by default 0.1
         temperature : float, optional
-            temperature for simulated annealing, by default 1
+            Temperature for simulated annealing, by default 1
         downweigh_factor : float, optional
-            amount to downweigh weights by, by default 0.8
+            Amount to downweigh weights by, by default 0.8
         sample_num : int, optional
-            number of samples taken for one time step, by default 100
+            Number of samples taken for one time step, by default 100
         alpha : float, optional
-            learning rate, by default 0.01
+            Learning rate, by default 0.01
         ema_alpha : float, optional
-            ema adjustment rate, by default 0.1
+            EMA adjustment rate, by default 0.1
         """
 
         self.sampling_model: BayesianNetwork = BayesianNetwork(sampling_edges)
