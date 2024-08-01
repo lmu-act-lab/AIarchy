@@ -5,12 +5,15 @@ import warnings
 import matplotlib.pyplot as plt
 import networkx as nx  # type: ignore
 import copy
-from typing import Callable
+import random
 from util import *
+from typing import Callable
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from pgmpy.factors.discrete import DiscreteFactor
 from pgmpy.models import BayesianNetwork  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
+
+warnings.filterwarnings("ignore")
 
 
 class CausalLearningAgent:
@@ -18,7 +21,7 @@ class CausalLearningAgent:
     def __init__(
         self,
         sampling_edges: list[tuple[str, str]],
-        structural_edges: list[tuple[str, str]],
+        utility_edges: list[tuple[str, str]],
         cpts: list[TabularCPD],
         utility_vars: set[str],
         reflective_vars: set[str],
@@ -41,7 +44,7 @@ class CausalLearningAgent:
         ----------
         sampling_edges : list[tuple[str, str]]
             Edges of the network to be used in the sampling model.
-        structural_edges : list[tuple[str, str]]
+        utility_edges : list[tuple[str, str]]
             Edges for the reward signals/utility vars (don't repeat the ones in sampling_edges).
         cpts : list[TabularCPD]
             CPTs for the sampling model.
@@ -87,7 +90,7 @@ class CausalLearningAgent:
             self.sampling_model.edges()
         )
         self.structural_model.add_nodes_from(self.utility_vars)
-        self.structural_model.add_edges_from(structural_edges)
+        self.structural_model.add_edges_from(utility_edges)
 
         self.reward_attr_model = self.structural_model.do(self.reflective_vars)
         self.inference_model = self.structural_model.do(self.non_utility_vars)
@@ -473,18 +476,18 @@ class CausalLearningAgent:
                 normal_time_step: TimeStep = self.time_step(
                     self.fixed_assignment, self.weights, self.sample_num
                 )
-                adjusted_time_step: TimeStep = self.time_step(
+                weight_adjusted_time_step: TimeStep = self.time_step(
                     self.fixed_assignment, adjusted_weights, self.sample_num
                 )
 
-                delta: float = sum(adjusted_time_step.average_reward.values()) - sum(
-                    normal_time_step.average_reward.values()
-                )
+                delta: float = sum(
+                    weight_adjusted_time_step.average_reward.values()
+                ) - sum(normal_time_step.average_reward.values())
 
                 if delta >= 0 or random.random() <= np.exp(
                     -abs(delta) / self.temperature
                 ):
-                    self.memory.append(adjusted_time_step)
+                    self.memory.append(weight_adjusted_time_step)
                     self.weights = adjusted_weights
             else:
                 true_reward: float = 0
@@ -516,7 +519,7 @@ class CausalLearningAgent:
                         true_reward += filtered_df[reward_signal].sum()
                     adjusted_cpt = self.nudge_cpt(
                         self.sampling_model.get_cpds(tweak_var),
-                        self.fixed_assignment,
+                        interventional_time_step.average_sample,
                         self.alpha,
                         true_reward,
                     )
@@ -706,3 +709,112 @@ class TimeStep:
 #! future research
 # * look into bayesian structure learning from data
 # *
+def reward(sample: dict[str, int]) -> dict[str, float]:
+    rewards: dict[str, float] = Counter()
+    rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
+    rewards["social"] += sample["ECs"]
+    rewards["health"] += sample["Sleep"] + sample["Exercise"]
+    return rewards
+
+
+list_of_cpts = [
+    TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]]),
+    TabularCPD(variable="Motivation", variable_card=2, values=[[0.5], [0.5]]),
+    TabularCPD(
+        variable="Tutoring",
+        variable_card=2,
+        values=[[0.9, 0.6, 0.2], [0.1, 0.4, 0.8]],
+        evidence=["SES"],
+        evidence_card=[3],
+    ),
+    TabularCPD(
+        variable="Time studying",
+        variable_card=3,
+        values=(
+            [
+                [0.6, 0.7, 0.3, 0.4, 0.55, 0.65, 0.1, 0.2, 0.4, 0.5, 0.1, 0.2],
+                [
+                    0.25,
+                    0.2,
+                    0.5,
+                    0.45,
+                    0.3,
+                    0.25,
+                    0.4,
+                    0.35,
+                    0.4,
+                    0.35,
+                    0.3,
+                    0.25,
+                ],
+                [
+                    0.15,
+                    0.1,
+                    0.2,
+                    0.15,
+                    0.15,
+                    0.1,
+                    0.5,
+                    0.45,
+                    0.2,
+                    0.15,
+                    0.6,
+                    0.55,
+                ],
+            ]
+        ),
+        evidence=["SES", "Motivation", "ECs"],
+        evidence_card=[3, 2, 2],
+    ),
+    TabularCPD(
+        variable="Exercise",
+        variable_card=2,
+        values=[[0.6, 0.4, 0.2], [0.4, 0.6, 0.8]],
+        evidence=["SES"],
+        evidence_card=[3],
+    ),
+    TabularCPD(
+        variable="ECs",
+        variable_card=2,
+        values=[[0.7, 0.5, 0.1], [0.3, 0.5, 0.9]],
+        evidence=["SES"],
+        evidence_card=[3],
+    ),
+    TabularCPD(
+        variable="Sleep",
+        variable_card=3,
+        values=[[0.1, 0.25, 0.55], [0.3, 0.4, 0.25], [0.6, 0.35, 0.2]],
+        evidence=["Time studying"],
+        evidence_card=[3],
+    ),
+]
+
+x = CausalLearningAgent(
+    sampling_edges=[
+        ("SES", "Tutoring"),
+        ("SES", "ECs"),
+        ("SES", "Time studying"),
+        ("Motivation", "Time studying"),
+        ("SES", "Exercise"),
+        ("ECs", "Time studying"),
+        ("Time studying", "Sleep"),
+    ],
+    utility_edges=[
+        ("Time studying", "grades"),
+        ("Tutoring", "grades"),
+        ("ECs", "social"),
+        ("Sleep", "health"),
+        ("Exercise", "health"),
+    ],
+    cpts=list_of_cpts,
+    utility_vars={"grades", "social", "health"},
+    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+    chance_vars={"Tutoring", "Motivation", "SES"},
+    glue_vars=set(),
+    reward_func=reward,
+    fixed_evidence={"SES": 1},
+)
+
+x.train(5)
+x.display_original_cpts()
+x.display_cpts()
