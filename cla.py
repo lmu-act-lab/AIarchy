@@ -453,9 +453,9 @@ class CausalLearningAgent:
         iterations : int
             Number of iterations to train the agent for.
         """
-        for _ in range(iterations):
+        while iterations > 0:
             utility_to_adjust: set[str] = set()
-            if _ > 0:
+            if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (
                         ema + self.ema_alpha * self.memory[-1].average_reward[var]
@@ -528,6 +528,7 @@ class CausalLearningAgent:
                     self.sampling_model.add_cpds(adjusted_cpt)
 
                 self.temperature *= 0.99
+                iterations -= 1
 
     def get_utilities_from_reflective(self, reflective_var: str) -> list[str]:
         """
