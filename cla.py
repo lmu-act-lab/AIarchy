@@ -29,9 +29,9 @@ class CausalLearningAgent:
         reward_func: Callable[[dict[str, int]], dict[str, float]],
         fixed_evidence: dict[str, int] = {},
         weights: dict[str, float] = {},
-        threshold: float = 0.1,
+        threshold: float = 0.05,
         temperature: float = 1,
-        downweigh_factor: float = 0.8,
+        downweigh_factor: float = 0.95,
         sample_num: int = 100,
         alpha: float = 0.01,
         ema_alpha: float = 0.1,
@@ -815,6 +815,5 @@ x = CausalLearningAgent(
     fixed_evidence={"SES": 1},
 )
 
-x.train(5)
-x.display_original_cpts()
-x.display_cpts()
+x.train(1000)
+x.plot_memory()
