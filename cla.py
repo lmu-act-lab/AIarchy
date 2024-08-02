@@ -213,6 +213,21 @@ class CausalLearningAgent:
                 print(cpd)
                 print("\n")
 
+    def display_original_var_cpt(self, var: str) -> None:
+        """
+        Displays the CPDs of a particular variable in the sampling model.
+
+        Parameters
+        ----------
+        var : str
+            Variable to display the CPD of.
+        """
+        for cpd in self.original_model.get_cpds():
+            if cpd.variable == var:
+                print(f"CPD of {cpd.variable}:")
+                print(cpd)
+                print("\n")
+
     def display_original_cpts(self) -> None:
         """
         Displays the CPDs of the original model.
@@ -816,4 +831,9 @@ x = CausalLearningAgent(
 )
 
 x.train(1000)
+for var in x.reflective_vars:
+    x.display_original_var_cpt(var)
+    print('=====================')
+    x.display_var_cpt(var)
+
 x.plot_memory()
