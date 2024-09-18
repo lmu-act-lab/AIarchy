@@ -303,6 +303,37 @@ class CausalLearningAgent:
 
         plt.show()
 
+    def plot_memory_against(self, other_cla: "CausalLearningAgent") -> None:
+        """
+        Plots the perceived reward at each iteration.
+        """
+        plot_data: dict[str, list[float]] = {}
+
+        for time_step in self.memory:
+            for key, value in time_step.average_reward.items():
+                if f"original, {key}" not in plot_data:
+                    plot_data[f"original, {key}"] = []
+                plot_data[f"original, {key}"].append(value)
+
+        for time_step in other_cla.memory:
+            for key, value in time_step.average_reward.items():
+                if f"compared, {key}" not in plot_data:
+                    plot_data[f"compared, {key}"] = []
+                plot_data[f"compared, {key}"].append(value)
+
+        for key, values in plot_data.items():
+            plt.plot(values, label=key)
+        
+        print(plot_data)
+
+        plt.xlabel("Iteration")
+        plt.ylabel("Perceived Reward")
+        plt.title("Perceived reward at iteration t")
+        plt.legend()
+
+        plt.show()
+
+
     def calculate_expected_reward(
         self,
         sample: dict[str, int],
@@ -459,9 +490,15 @@ class CausalLearningAgent:
         cpd.values = normalized_values
         return cpd
 
-    def train(self, iterations: int) -> None:
+    def train(self, iterations: int, style: str) -> None:
+        if str == "SA":
+            return self.train_SA(iterations)
+        if str =="ME":
+            return self.train_ME(iterations)
+
+    def train_SA(self, iterations: int) -> None:
         """
-        Train the agent for a specified number of iterations.
+        Train the agent for a specified number of iterations using Simulated Annealing
 
         Parameters
         ----------
@@ -544,6 +581,91 @@ class CausalLearningAgent:
 
                 self.temperature *= 0.99
                 iterations -= 1
+
+    def train_ME(self, iterations: int) -> None:
+        # ! TODO: REFACTOR THIS ASAP
+        cpts: dict[int, Student] = {}
+        reward: float = 0
+        for i in range(iterations):
+            print("in loop")
+            # if i == 30:
+            #     self.model.get_cpds("Motivation").values[1] += 0.4
+            #     self.model.get_cpds("Motivation").values[0] -= 0.4
+            cumulative_dict: dict[str,
+                                  tuple[dict[str, int], dict[str, float]]] = {}
+
+            utility_to_adjust: list[str] = []
+            if i > 0:
+                for var, ema in self.ema.items():
+                    new_ema = (1 - self.ema_alpha) * (
+                        ema + self.ema_alpha * self.memory[-1][var]
+                    )
+                    self.ema[var] = new_ema
+                    if new_ema < self.threshold:
+                        utility_to_adjust.append(var)
+
+            cumulative_dict["no intervention"] = self.time_step(
+                self.fixed_assignment,
+                self.weights,
+                self.sample_num,
+            )
+
+            # if utility_to_adjust:
+            utility_to_weights: dict[str, dict[str, float]] = {}
+            for var in utility_to_adjust:
+                new_weights: dict[str, float] = copy.deepcopy(self.weights)
+                new_weights[var] *= self.downweigh_factor
+                new_weights = {
+                    key: value / sum(new_weights.values())
+                    for key, value in new_weights.items()
+                }
+                utility_to_weights[var] = new_weights
+                cumulative_dict[f"{var}- weight change"] = self.time_step(
+                    self.fixed_assignment,
+                    new_weights,
+                    self.sample_num,
+                )
+
+            for var, card in self.card_dict.items():
+                for val in range(card):
+                    cumulative_dict[f"{var}: {val}"] = self.time_step(
+                        fixed_evidence=self.fixed_assignment,
+                        weights=self.weights,
+                        samples=self.sample_num,
+                        do={var: val},
+                    )
+
+            max_key: str = max(
+                cumulative_dict, key=lambda k: sum(
+                    cumulative_dict[k][1].values())
+            )
+
+            if max_key == "no intervention":
+                continue
+
+            if "weight change" in max_key:
+                variable = max_key.split("-")[0]
+                self.weights = utility_to_weights[variable]
+                self.weight_history[i] = self.weights
+                continue
+
+            variable: str = max_key.split(": ")[0]
+            evidence: dict[str, int] = cumulative_dict[max_key][0]
+            self.memory.append(cumulative_dict["no intervention"][1])
+
+            for reward_signal in self.get_utilities_from_reflective(variable):
+                reward += cumulative_dict[max_key][1][reward_signal]
+            new_cpd = self.nudge_cpt(
+                self.model.get_cpds(variable),
+                evidence,
+                self.alpha,
+                reward,
+            )
+            self.model.remove_cpds(self.model.get_cpds(variable))
+            self.model.add_cpds(new_cpd)
+            # if i == 29 or i == 31 or i == 99:
+            #     cpts[i] = copy.deepcopy(self)
+        return cpts
 
     def get_utilities_from_reflective(self, reflective_var: str) -> list[str]:
         """
@@ -830,10 +952,38 @@ x = CausalLearningAgent(
     fixed_evidence={"SES": 1},
 )
 
-x.train(1000)
+y = CausalLearningAgent(
+    sampling_edges=[
+        ("SES", "Tutoring"),
+        ("SES", "ECs"),
+        ("SES", "Time studying"),
+        ("Motivation", "Time studying"),
+        ("SES", "Exercise"),
+        ("ECs", "Time studying"),
+        ("Time studying", "Sleep"),
+    ],
+    utility_edges=[
+        ("Time studying", "grades"),
+        ("Tutoring", "grades"),
+        ("ECs", "social"),
+        ("Sleep", "health"),
+        ("Exercise", "health"),
+    ],
+    cpts=list_of_cpts,
+    utility_vars={"grades", "social", "health"},
+    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+    chance_vars={"Tutoring", "Motivation", "SES"},
+    glue_vars=set(),
+    reward_func=reward,
+    fixed_evidence={"SES": 0},
+)
+
+x.train(10)
+y.train(10)
 for var in x.reflective_vars:
     x.display_original_var_cpt(var)
     print('=====================')
     x.display_var_cpt(var)
 
 x.plot_memory()
+x.plot_memory_against(y)
