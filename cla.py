@@ -116,7 +116,8 @@ class CausalLearningAgent:
             for key in self.reflective_vars
         }
 
-        self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
+        self.original_model: BayesianNetwork = copy.deepcopy(
+            self.sampling_model)
 
     def get_cpts(self) -> list[TabularCPD]:
         """
@@ -323,8 +324,6 @@ class CausalLearningAgent:
 
         for key, values in plot_data.items():
             plt.plot(values, label=key)
-        
-        print(plot_data)
 
         plt.xlabel("Iteration")
         plt.ylabel("Perceived Reward")
@@ -332,7 +331,6 @@ class CausalLearningAgent:
         plt.legend()
 
         plt.show()
-
 
     def calculate_expected_reward(
         self,
@@ -376,7 +374,8 @@ class CausalLearningAgent:
             )
 
         for category, reward in rewards.items():
-            assignment = {var: sample[var] for var in rewards_queries[category]}
+            assignment = {var: sample[var]
+                          for var in rewards_queries[category]}
             expected_rewards[category] += reward * reward_probs[category].get_value(
                 **assignment
             )
@@ -449,7 +448,7 @@ class CausalLearningAgent:
                 [{**sample_dict, **weighted_reward}]
             )
             memory = pd.concat([memory, combined_dict], ignore_index=True)
-        return TimeStep(memory, self.non_utility_vars, self.utility_vars)
+        return TimeStep(memory, self.non_utility_vars, self.utility_vars, weights, next(iter(do)) if do else None)
 
     def nudge_cpt(
         self,
@@ -482,7 +481,8 @@ class CausalLearningAgent:
 
         tuple_indices: tuple[int, ...] = tuple(indices)
 
-        values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+        values[tuple_indices] += values[tuple_indices] * \
+            increase_factor * reward
 
         sum_values: list = np.sum(values, axis=0)
         normalized_values: list = values / sum_values
@@ -491,9 +491,9 @@ class CausalLearningAgent:
         return cpd
 
     def train(self, iterations: int, style: str) -> None:
-        if str == "SA":
+        if style == "SA":
             return self.train_SA(iterations)
-        if str =="ME":
+        if style == "ME":
             return self.train_ME(iterations)
 
     def train_SA(self, iterations: int) -> None:
@@ -510,7 +510,8 @@ class CausalLearningAgent:
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (
-                        ema + self.ema_alpha * self.memory[-1].average_reward[var]
+                        ema + self.ema_alpha *
+                        self.memory[-1].average_reward[var]
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
@@ -520,7 +521,8 @@ class CausalLearningAgent:
                 list(utility_to_adjust | self.reflective_vars)
             )
             if tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
+                adjusted_weights: dict[str,
+                                       float] = copy.deepcopy(self.weights)
                 adjusted_weights[tweak_var] *= self.downweigh_factor
                 adjusted_weights = normalize(adjusted_weights)
 
@@ -583,89 +585,74 @@ class CausalLearningAgent:
                 iterations -= 1
 
     def train_ME(self, iterations: int) -> None:
-        # ! TODO: REFACTOR THIS ASAP
-        cpts: dict[int, Student] = {}
-        reward: float = 0
-        for i in range(iterations):
-            print("in loop")
-            # if i == 30:
-            #     self.model.get_cpds("Motivation").values[1] += 0.4
-            #     self.model.get_cpds("Motivation").values[0] -= 0.4
-            cumulative_dict: dict[str,
-                                  tuple[dict[str, int], dict[str, float]]] = {}
+        """
+        Trains the agent for a specified number of iterations exploiting at every step using interventions.
 
-            utility_to_adjust: list[str] = []
-            if i > 0:
+        Parameters
+        ----------
+        iterations : int
+            Number of iterations to train the agent for
+        """
+        while iterations > 0:
+            utility_to_adjust: set[str] = set()
+            time_steps: set[TimeStep] = set()
+
+            if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (
-                        ema + self.ema_alpha * self.memory[-1][var]
+                        ema + self.ema_alpha *
+                        self.memory[-1].average_reward[var]
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
-                        utility_to_adjust.append(var)
+                        utility_to_adjust.add(var)
+            time_steps.add(self.time_step(
+                self.fixed_assignment, self.weights, self.sample_num))
+            for tweak_var in utility_to_adjust:
+                adjusted_weights: dict[str,
+                                       float] = copy.deepcopy(self.weights)
+                adjusted_weights[tweak_var] *= self.downweigh_factor
+                adjusted_weights = normalize(adjusted_weights)
 
-            cumulative_dict["no intervention"] = self.time_step(
-                self.fixed_assignment,
-                self.weights,
-                self.sample_num,
-            )
-
-            # if utility_to_adjust:
-            utility_to_weights: dict[str, dict[str, float]] = {}
-            for var in utility_to_adjust:
-                new_weights: dict[str, float] = copy.deepcopy(self.weights)
-                new_weights[var] *= self.downweigh_factor
-                new_weights = {
-                    key: value / sum(new_weights.values())
-                    for key, value in new_weights.items()
-                }
-                utility_to_weights[var] = new_weights
-                cumulative_dict[f"{var}- weight change"] = self.time_step(
-                    self.fixed_assignment,
-                    new_weights,
-                    self.sample_num,
-                )
+                time_steps.add(self.time_step(
+                    self.fixed_assignment, adjusted_weights, self.sample_num
+                ))
 
             for var, card in self.card_dict.items():
                 for val in range(card):
-                    cumulative_dict[f"{var}: {val}"] = self.time_step(
+                    time_steps.add(self.time_step(
                         fixed_evidence=self.fixed_assignment,
                         weights=self.weights,
                         samples=self.sample_num,
                         do={var: val},
-                    )
+                    ))
 
-            max_key: str = max(
-                cumulative_dict, key=lambda k: sum(
-                    cumulative_dict[k][1].values())
-            )
+            best_timestep: TimeStep = max(
+                time_steps, key=lambda time_step: sum(time_step.average_reward.values()))
 
-            if max_key == "no intervention":
-                continue
+            if best_timestep.weights != self.weights:
+                self.memory.append(best_timestep)
+                self.weights = best_timestep.weights
+            else:
+                true_reward: float = 0
+                self.memory.append(best_timestep)
+                filtered_df: pd.DataFrame = best_timestep.memory
+                for var, value in best_timestep.average_sample.items():
+                    filtered_df = filtered_df[filtered_df[var] == value]
+                for reward_signal in self.get_utilities_from_reflective(best_timestep.tweak_var):
+                    true_reward += filtered_df[reward_signal].sum()
+                adjusted_cpt = self.nudge_cpt(
+                    self.sampling_model.get_cpds(best_timestep.tweak_var),
+                    best_timestep.average_sample,
+                    self.alpha,
+                    true_reward,
+                )
+                self.sampling_model.remove_cpds(
+                    self.sampling_model.get_cpds(best_timestep.tweak_var)
+                )
+                self.sampling_model.add_cpds(adjusted_cpt)
 
-            if "weight change" in max_key:
-                variable = max_key.split("-")[0]
-                self.weights = utility_to_weights[variable]
-                self.weight_history[i] = self.weights
-                continue
-
-            variable: str = max_key.split(": ")[0]
-            evidence: dict[str, int] = cumulative_dict[max_key][0]
-            self.memory.append(cumulative_dict["no intervention"][1])
-
-            for reward_signal in self.get_utilities_from_reflective(variable):
-                reward += cumulative_dict[max_key][1][reward_signal]
-            new_cpd = self.nudge_cpt(
-                self.model.get_cpds(variable),
-                evidence,
-                self.alpha,
-                reward,
-            )
-            self.model.remove_cpds(self.model.get_cpds(variable))
-            self.model.add_cpds(new_cpd)
-            # if i == 29 or i == 31 or i == 99:
-            #     cpts[i] = copy.deepcopy(self)
-        return cpts
+            iterations -= 1
 
     def get_utilities_from_reflective(self, reflective_var: str) -> list[str]:
         """
@@ -702,7 +689,8 @@ class CausalLearningAgent:
             The CPD as a DataFrame.
         """
         levels: list[range] = [range(card) for card in cpd.cardinality]
-        index: pd.MultiIndex = pd.MultiIndex.from_product(levels, names=cpd.variables)
+        index: pd.MultiIndex = pd.MultiIndex.from_product(
+            levels, names=cpd.variables)
 
         df: pd.DataFrame = pd.DataFrame(
             cpd.values.flatten(), index=index, columns=["Delta"]
@@ -781,7 +769,7 @@ class CausalLearningAgent:
 
 class TimeStep:
     def __init__(
-        self, memory: pd.DataFrame, sample_vars: set[str], reward_vars: set[str]
+        self, memory: pd.DataFrame, sample_vars: set[str], reward_vars: set[str], weights: dict[str, float], tweak_var: str
     ):
         """
         Custom Timestep class that holds memory, average sample values,
@@ -795,10 +783,14 @@ class TimeStep:
             Sample variables.
         reward_vars : set[str]
             Utility/reward variables.
+        weights : dict[str, float]
+            Weights associated with rewards
         """
+        self.tweak_var = tweak_var
         self.memory: pd.DataFrame = memory
         self.average_sample: dict[str, int] = {}
         self.average_reward: dict[str, float] = {}
+        self.weights = weights
 
         for var in sample_vars:
             self.average_sample[var] = self.get_rounded_column_average(var)
@@ -842,6 +834,21 @@ class TimeStep:
         average = self.memory[column_name].mean()
         return average
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TimeStep):
+            return self.memory.all().all() == other.memory.all().all() and self.average_sample == other.average_sample and self.average_reward == other.average_reward
+        return False
+
+    def __hash__(self):
+        # Hash sample_vars, reward_vars as sorted tuples to maintain order consistency
+        sample_vars_hash = hash(tuple(sorted(self.average_sample.keys())))
+        reward_vars_hash = hash(tuple(sorted(self.average_reward.keys())))
+        weights_hash = hash(tuple(sorted(self.weights.items())))
+        tweak_var_hash = hash(self.tweak_var)
+
+        # Combine the hashes using XOR or a tuple for a unique combination
+        return hash((sample_vars_hash, reward_vars_hash, weights_hash, tweak_var_hash))
+
 
 #! future research
 # * look into bayesian structure learning from data
@@ -855,7 +862,8 @@ def reward(sample: dict[str, int]) -> dict[str, float]:
 
 
 list_of_cpts = [
-    TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]]),
+    TabularCPD(variable="SES", variable_card=3,
+               values=[[0.29], [0.52], [0.19]]),
     TabularCPD(variable="Motivation", variable_card=2, values=[[0.5], [0.5]]),
     TabularCPD(
         variable="Tutoring",
@@ -978,8 +986,8 @@ y = CausalLearningAgent(
     fixed_evidence={"SES": 0},
 )
 
-x.train(10)
-y.train(10)
+x.train(10, "ME")
+y.train(10, "SA")
 for var in x.reflective_vars:
     x.display_original_var_cpt(var)
     print('=====================')
