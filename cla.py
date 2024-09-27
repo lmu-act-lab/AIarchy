@@ -74,9 +74,9 @@ class CausalLearningAgent:
         ema_alpha : float, optional
             EMA adjustment rate, by default 0.1
         """
-
         self.sampling_model: BayesianNetwork = BayesianNetwork(sampling_edges)
-
+        self.sampling_model.add_nodes_from(chance_vars | reflective_vars | glue_vars)
+        self.utility_edges: list[tuple[str, str]] = utility_edges
         self.memory: list[TimeStep] = []
         self.utility_vars: set[str] = utility_vars
         self.reflective_vars: set[str] = reflective_vars
@@ -105,7 +105,6 @@ class CausalLearningAgent:
             self.weights: dict[str, float] = Counter(
                 {key: 1 / len(self.utility_vars) for key in self.utility_vars}
             )
-        self.weight_history: dict[int, dict[str, float]] = {}
         self.reward_func = reward_func
 
         for cpt in cpts:
@@ -116,8 +115,7 @@ class CausalLearningAgent:
             for key in self.reflective_vars
         }
 
-        self.original_model: BayesianNetwork = copy.deepcopy(
-            self.sampling_model)
+        self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
 
     def get_cpts(self) -> list[TabularCPD]:
         """
@@ -181,15 +179,15 @@ class CausalLearningAgent:
             print(time_step)
             print("\n")
 
-    def display_weights(self) -> None:
-        """
-        Displays the weights of the agent.
-        """
-        for time_step, weights in self.weight_history.items():
-            print(f"Iteration {time_step}:")
-            print(weights)
-            print("\n")
-
+    # def display_weights(self) -> None:
+    #     """
+    #     Displays the weights of the agent.
+    #     """
+    #     for time_step, weights in self.weight_history.items():
+    #         print(f"Iteration {time_step}:")
+    #         print(weights)
+    #         print("\n")
+# 
     def display_cpts(self) -> None:
         """
         Displays the CPDs of the sampling model.
@@ -332,6 +330,28 @@ class CausalLearningAgent:
 
         plt.show()
 
+    def plot_weights(self) -> None:
+        """
+        Plots the weights at each iteration.
+        """
+        plot_data: dict[str, list[float]] = {}
+
+        for time_step in self.memory:
+            for key, value in time_step.weights.items():
+                if key not in plot_data:
+                    plot_data[key] = []
+                plot_data[key].append(value)
+
+        for key, values in plot_data.items():
+            plt.plot(values, label=key)
+
+        plt.xlabel("Iteration")
+        plt.ylabel("Weight")
+        plt.title("Weight at iteration t")
+        plt.legend()
+
+        plt.show()
+
     def calculate_expected_reward(
         self,
         sample: dict[str, int],
@@ -374,8 +394,7 @@ class CausalLearningAgent:
             )
 
         for category, reward in rewards.items():
-            assignment = {var: sample[var]
-                          for var in rewards_queries[category]}
+            assignment = {var: sample[var] for var in rewards_queries[category]}
             expected_rewards[category] += reward * reward_probs[category].get_value(
                 **assignment
             )
@@ -441,14 +460,22 @@ class CausalLearningAgent:
                     n_samples=1, evidence=fixed_evidence
                 )
             sample_dict: dict[str, int] = sample_df.iloc[0].to_dict()
-            rewards: dict[str, float] = self.reward_func(sample_dict)
+            rewards: dict[str, float] = self.reward_func(
+                sample_dict, self.utility_edges
+            )
             for var, weight in weights.items():
                 weighted_reward[var] = rewards[var] * weight
             combined_dict: pd.DataFrame = pd.DataFrame(
                 [{**sample_dict, **weighted_reward}]
             )
             memory = pd.concat([memory, combined_dict], ignore_index=True)
-        return TimeStep(memory, self.non_utility_vars, self.utility_vars, weights, next(iter(do)) if do else None)
+        return TimeStep(
+            memory,
+            self.non_utility_vars,
+            self.utility_vars,
+            weights,
+            next(iter(do)) if do else None,
+        )
 
     def nudge_cpt(
         self,
@@ -481,8 +508,7 @@ class CausalLearningAgent:
 
         tuple_indices: tuple[int, ...] = tuple(indices)
 
-        values[tuple_indices] += values[tuple_indices] * \
-            increase_factor * reward
+        values[tuple_indices] += values[tuple_indices] * increase_factor * reward
 
         sum_values: list = np.sum(values, axis=0)
         normalized_values: list = values / sum_values
@@ -510,8 +536,7 @@ class CausalLearningAgent:
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (
-                        ema + self.ema_alpha *
-                        self.memory[-1].average_reward[var]
+                        ema + self.ema_alpha * self.memory[-1].average_reward[var]
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
@@ -521,8 +546,7 @@ class CausalLearningAgent:
                 list(utility_to_adjust | self.reflective_vars)
             )
             if tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str,
-                                       float] = copy.deepcopy(self.weights)
+                adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
                 adjusted_weights[tweak_var] *= self.downweigh_factor
                 adjusted_weights = normalize(adjusted_weights)
 
@@ -600,35 +624,37 @@ class CausalLearningAgent:
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (
-                        ema + self.ema_alpha *
-                        self.memory[-1].average_reward[var]
+                        ema + self.ema_alpha * self.memory[-1].average_reward[var]
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
                         utility_to_adjust.add(var)
-            time_steps.add(self.time_step(
-                self.fixed_assignment, self.weights, self.sample_num))
+
             for tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str,
-                                       float] = copy.deepcopy(self.weights)
+                adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
                 adjusted_weights[tweak_var] *= self.downweigh_factor
                 adjusted_weights = normalize(adjusted_weights)
 
-                time_steps.add(self.time_step(
-                    self.fixed_assignment, adjusted_weights, self.sample_num
-                ))
+                time_steps.add(
+                    self.time_step(
+                        self.fixed_assignment, adjusted_weights, self.sample_num
+                    )
+                )
 
             for var, card in self.card_dict.items():
                 for val in range(card):
-                    time_steps.add(self.time_step(
-                        fixed_evidence=self.fixed_assignment,
-                        weights=self.weights,
-                        samples=self.sample_num,
-                        do={var: val},
-                    ))
+                    time_steps.add(
+                        self.time_step(
+                            fixed_evidence=self.fixed_assignment,
+                            weights=self.weights,
+                            samples=self.sample_num,
+                            do={var: val},
+                        )
+                    )
 
             best_timestep: TimeStep = max(
-                time_steps, key=lambda time_step: sum(time_step.average_reward.values()))
+                time_steps, key=lambda time_step: sum(time_step.average_reward.values())
+            )
 
             if best_timestep.weights != self.weights:
                 self.memory.append(best_timestep)
@@ -639,7 +665,9 @@ class CausalLearningAgent:
                 filtered_df: pd.DataFrame = best_timestep.memory
                 for var, value in best_timestep.average_sample.items():
                     filtered_df = filtered_df[filtered_df[var] == value]
-                for reward_signal in self.get_utilities_from_reflective(best_timestep.tweak_var):
+                for reward_signal in self.get_utilities_from_reflective(
+                    best_timestep.tweak_var
+                ):
                     true_reward += filtered_df[reward_signal].sum()
                 adjusted_cpt = self.nudge_cpt(
                     self.sampling_model.get_cpds(best_timestep.tweak_var),
@@ -689,8 +717,7 @@ class CausalLearningAgent:
             The CPD as a DataFrame.
         """
         levels: list[range] = [range(card) for card in cpd.cardinality]
-        index: pd.MultiIndex = pd.MultiIndex.from_product(
-            levels, names=cpd.variables)
+        index: pd.MultiIndex = pd.MultiIndex.from_product(levels, names=cpd.variables)
 
         df: pd.DataFrame = pd.DataFrame(
             cpd.values.flatten(), index=index, columns=["Delta"]
@@ -769,7 +796,12 @@ class CausalLearningAgent:
 
 class TimeStep:
     def __init__(
-        self, memory: pd.DataFrame, sample_vars: set[str], reward_vars: set[str], weights: dict[str, float], tweak_var: str
+        self,
+        memory: pd.DataFrame,
+        sample_vars: set[str],
+        reward_vars: set[str],
+        weights: dict[str, float],
+        tweak_var: str,
     ):
         """
         Custom Timestep class that holds memory, average sample values,
@@ -836,7 +868,11 @@ class TimeStep:
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, TimeStep):
-            return self.memory.all().all() == other.memory.all().all() and self.average_sample == other.average_sample and self.average_reward == other.average_reward
+            return (
+                self.memory.all().all() == other.memory.all().all()
+                and self.average_sample == other.average_sample
+                and self.average_reward == other.average_reward
+            )
         return False
 
     def __hash__(self):
@@ -853,7 +889,9 @@ class TimeStep:
 #! future research
 # * look into bayesian structure learning from data
 # *
-def reward(sample: dict[str, int]) -> dict[str, float]:
+def reward(
+    sample: dict[str, int], utility_edges: list[tuple[str, str]]
+) -> dict[str, float]:
     rewards: dict[str, float] = Counter()
     rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
     rewards["social"] += sample["ECs"]
@@ -861,9 +899,17 @@ def reward(sample: dict[str, int]) -> dict[str, float]:
     return rewards
 
 
+def default_reward(
+    sample: dict[str, int], utility_edges: list[tuple[str, str]]
+) -> dict[str, float]:
+    rewards: dict[str, float] = Counter()
+    for var, utility in utility_edges:
+        rewards[utility] += sample[var]
+    return rewards
+
+
 list_of_cpts = [
-    TabularCPD(variable="SES", variable_card=3,
-               values=[[0.29], [0.52], [0.19]]),
+    TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]]),
     TabularCPD(variable="Motivation", variable_card=2, values=[[0.5], [0.5]]),
     TabularCPD(
         variable="Tutoring",
@@ -986,12 +1032,298 @@ y = CausalLearningAgent(
     fixed_evidence={"SES": 0},
 )
 
-x.train(10, "ME")
-y.train(10, "SA")
-for var in x.reflective_vars:
-    x.display_original_var_cpt(var)
-    print('=====================')
-    x.display_var_cpt(var)
+struct_1: CausalLearningAgent = CausalLearningAgent(
+    sampling_edges=[("refl_2", "refl_1")],
+    utility_edges=[("refl_2", "util_2"), ("refl_1", "util_1")],
+    cpts=[
+        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="refl_1",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["refl_2"],
+            evidence_card=[2],
+        ),
+    ],
+    utility_vars={"util_1", "util_2"},
+    reflective_vars={"refl_1", "refl_2"},
+    chance_vars=set(),
+    glue_vars=set(),
+    reward_func=default_reward,
+    fixed_evidence={},
+)
+
+struct_2: CausalLearningAgent = CausalLearningAgent(
+    sampling_edges=[("chance_1", "refl_1"), ("chance_2", "refl_1")],
+    utility_edges=[("refl_1", "util_1")],
+    cpts=[
+        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="refl_1",
+            variable_card=2,
+            values=[[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]],
+            evidence=["chance_1", "chance_2"],
+            evidence_card=[2, 2],
+        ),
+    ],
+    utility_vars={"util_1"},
+    reflective_vars={"refl_1"},
+    chance_vars={"chance_1", "chance_2"},
+    glue_vars=set(),
+    reward_func=default_reward,
+    fixed_evidence={},
+)
+
+struct_3: CausalLearningAgent = CausalLearningAgent(
+    sampling_edges=[("refl_1", "chance_1"), ("refl_2", "chance_1")],
+    utility_edges=[("chance_1", "util_1")],
+    cpts=[
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="chance_1",
+            variable_card=2,
+            values=[[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]],
+            evidence=["refl_1", "refl_2"],
+            evidence_card=[2, 2],
+        ),
+    ],
+    utility_vars={"util_1"},
+    reflective_vars={"refl_1", "refl_2"},
+    chance_vars={"chance_1"},
+    glue_vars=set(),
+    reward_func=default_reward,
+    fixed_evidence={},
+)
+
+struct_4: CausalLearningAgent = CausalLearningAgent(
+    [("chance_1", "refl_1")],
+    [("refl_1", "util_1")],
+    [
+        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="refl_1",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["chance_1"],
+            evidence_card=[2],
+        ),
+    ],
+    {"util_1"},
+    {"refl_1"},
+    {"chance_1"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_5: CausalLearningAgent = CausalLearningAgent(
+    [("refl_1", "chance_1")],
+    [("chance_1", "util_1")],
+    [
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="chance_1",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["refl_1"],
+            evidence_card=[2],
+        ),
+    ],
+    {"util_1"},
+    {"refl_1"},
+    {"chance_1"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_6 = CausalLearningAgent(
+    [("chance_1", "refl_1"), ("chance_1", "refl_2")],
+    [("refl_1", "util_1"), ("refl_2", "util_1")],
+    [
+        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="refl_1",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["chance_1"],
+            evidence_card=[2],
+        ),
+        TabularCPD(
+            variable="refl_2",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["chance_1"],
+            evidence_card=[2],
+        ),
+    ],
+    {"util_1"},
+    {"refl_1", "refl_2"},
+    {"chance_1"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_7 = CausalLearningAgent(
+    [("refl_1", "chance_1"), ("refl_1", "chance_2")],
+    [("chance_1", "util_1"), ("chance_2", "util_1")],
+    [
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="chance_1",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["refl_1"],
+            evidence_card=[2],
+        ),
+        TabularCPD(
+            variable="chance_2",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["refl_1"],
+            evidence_card=[2],
+        ),
+    ],
+    {"util_1"},
+    {"refl_1"},
+    {"chance_1", "chance_2"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_8: CausalLearningAgent = CausalLearningAgent(
+    [],
+    [("refl_1", "util_1"), ("chance_1", "util_1"), ("chance_2", "util_1")],
+    [
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
+    ],
+    {"util_1"},
+    {"refl_1"},
+    {"chance_1", "chance_2"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_9: CausalLearningAgent = CausalLearningAgent(
+    [],
+    [("refl_1", "util_1"), ("chance_1", "util_1"), ("refl_2", "util_1")],
+    [
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+    ],
+    {"util_1"},
+    {"refl_1", "refl_2"},
+    {"chance_1"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_10: CausalLearningAgent = CausalLearningAgent(
+    [("chance_1", "refl_1"), ("refl_1", "chance_2")],
+    [("chance_2", "util_1")],
+    [
+        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(
+            variable="refl_1",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["chance_1"],
+            evidence_card=[2],
+        ),
+        TabularCPD(
+            variable="chance_2",
+            variable_card=2,
+            values=[[0.5, 0.5], [0.5, 0.5]],
+            evidence=["refl_1"],
+            evidence_card=[2],
+        ),
+    ],
+    {"util_1"},
+    {"refl_1"},
+    {"chance_1", "chance_2"},
+    set(),
+    default_reward,
+    {},
+)
+
+
+x.train(500, "SA")
+y.train(500, "SA")
+struct_1.train(500, "SA")
+struct_2.train(500, "SA")
+struct_3.train(500, "SA")
+struct_4.train(500, "SA")
+struct_5.train(500, "SA")
+struct_6.train(500, "SA")
+struct_7.train(500, "SA")
+struct_8.train(500, "SA")
+struct_9.train(500, "SA")
+struct_10.train(500, "SA")
 
 x.plot_memory()
+y.plot_memory()
+struct_1.plot_memory()
+struct_2.plot_memory()
+struct_3.plot_memory()
+struct_4.plot_memory()
+struct_5.plot_memory()
+struct_6.plot_memory()
+struct_7.plot_memory()
+struct_8.plot_memory()
+struct_9.plot_memory()
+struct_10.plot_memory()
+
+x.plot_weights()
+y.plot_weights()
+struct_1.plot_weights()
+struct_2.plot_weights()
+struct_3.plot_weights()
+struct_4.plot_weights()
+struct_5.plot_weights()
+struct_6.plot_weights()
+struct_7.plot_weights()
+struct_8.plot_weights()
+struct_9.plot_weights()
+struct_10.plot_weights()
+
 x.plot_memory_against(y)
+struct_2.plot_memory_against(struct_3)
+struct_4.plot_memory_against(struct_5)
+struct_6.plot_memory_against(struct_7)
+struct_8.plot_memory_against(struct_9)
+
+x.write_cpds_to_csv(x.sampling_model.get_cpds(), "x", "data")
+y.write_cpds_to_csv(y.sampling_model.get_cpds(), "y", "data")
+struct_1.write_cpds_to_csv(struct_1.sampling_model.get_cpds(), "struct_1", "data")
+struct_2.write_cpds_to_csv(struct_2.sampling_model.get_cpds(), "struct_2", "data")
+struct_3.write_cpds_to_csv(struct_3.sampling_model.get_cpds(), "struct_3", "data")
+struct_4.write_cpds_to_csv(struct_4.sampling_model.get_cpds(), "struct_4", "data")
+struct_5.write_cpds_to_csv(struct_5.sampling_model.get_cpds(), "struct_5", "data")
+struct_6.write_cpds_to_csv(struct_6.sampling_model.get_cpds(), "struct_6", "data")
+struct_7.write_cpds_to_csv(struct_7.sampling_model.get_cpds(), "struct_7", "data")
+struct_8.write_cpds_to_csv(struct_8.sampling_model.get_cpds(), "struct_8", "data")
+struct_9.write_cpds_to_csv(struct_9.sampling_model.get_cpds(), "struct_9", "data")
+struct_10.write_cpds_to_csv(struct_10.sampling_model.get_cpds(), "struct_10", "data")
+
+x.write_delta_cpd_to_csv(x.sampling_model.get_cpds(), "x", "data")
+y.write_delta_cpd_to_csv(y.sampling_model.get_cpds(), "y", "data")
+struct_1.write_delta_cpd_to_csv(struct_1.sampling_model.get_cpds(), "struct_1", "data")
+struct_2.write_delta_cpd_to_csv(struct_2.sampling_model.get_cpds(), "struct_2", "data")
+struct_3.write_delta_cpd_to_csv(struct_3.sampling_model.get_cpds(), "struct_3", "data")
+struct_4.write_delta_cpd_to_csv(struct_4.sampling_model.get_cpds(), "struct_4", "data")
+struct_5.write_delta_cpd_to_csv(struct_5.sampling_model.get_cpds(), "struct_5", "data")
+struct_6.write_delta_cpd_to_csv(struct_6.sampling_model.get_cpds(), "struct_6", "data")
+struct_7.write_delta_cpd_to_csv(struct_7.sampling_model.get_cpds(), "struct_7", "data")
+struct_8.write_delta_cpd_to_csv(struct_8.sampling_model.get_cpds(), "struct_8", "data")
+struct_9.write_delta_cpd_to_csv(struct_9.sampling_model.get_cpds(), "struct_9", "data")
+struct_10.write_delta_cpd_to_csv(struct_10.sampling_model.get_cpds(), "struct_10", "data")
+
