@@ -25,8 +25,8 @@ class CausalLearningAgent:
         utility_vars: set[str],
         reflective_vars: set[str],
         chance_vars: set[str],
-        glue_vars: set[str],
         reward_func: Callable[[dict[str, int]], dict[str, float]],
+        glue_vars: dict["CausalLearningAgent", str] = {},
         fixed_evidence: dict[str, int] = {},
         weights: dict[str, float] = {},
         threshold: float = 0.05,
@@ -81,7 +81,7 @@ class CausalLearningAgent:
         self.utility_vars: set[str] = utility_vars
         self.reflective_vars: set[str] = reflective_vars
         self.chance_vars: set[str] = chance_vars
-        self.glue_vars: set[str] = glue_vars
+        self.glue_vars: dict["CausalLearningAgent", str] = glue_vars
         self.non_utility_vars: set[str] = reflective_vars | chance_vars | glue_vars
         self.fixed_assignment: dict[str, int] = fixed_evidence
 
@@ -792,6 +792,9 @@ class CausalLearningAgent:
             )
             file_name: str = f"Delta for {name}, {cpd.variable}.csv"
             df.to_csv(f"{folder}/{file_name}")
+            
+    def add_glue_dict(self, other: "CausalLearningAgent", var: str) -> None:
+        self.glue_vars.update({other : var})
 
 
 class TimeStep:
@@ -909,6 +912,13 @@ def default_reward(
 
 
 list_of_cpts = [
+    # Teacher CPDs w/ real-life prob values
+    TabularCPD(variable="Pay", variable_card=2, values=[[0.3], [0.7]]),
+    TabularCPD(variable="Bills", variable_card=2, values=[[0.8, 0.2], [0.2, 0.8]], evidence=["Pay"], evidence_card=[2]),
+    TabularCPD(variable="Time grading", variable_card=2, values=[[0.4], [0.6]]),
+    TabularCPD(variable="Family time", variable_card=2, values=[[0.5], [0.5]]),
+    TabularCPD(variable="Hobbies", variable_card=2, values=[[0.6], [0.4]]),
+    TabularCPD(variable="Lesson planning", variable_card=2, values=[[0.7, 0.3], [0.3, 0.7]], evidence=["Grades"], evidence_card=[2]),
     TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]]),
     TabularCPD(variable="Motivation", variable_card=2, values=[[0.5], [0.5]]),
     TabularCPD(
@@ -980,6 +990,33 @@ list_of_cpts = [
     ),
 ]
 
+teacher = CausalLearningAgent(
+    sampling_edges=[
+        ("Pay", "Bills"),
+        ("Bills", "happiness"),
+        ("Time grading", "wellness"),
+        ("Time grading", "teaching score"),
+        ("Family time", "wellness"),
+        ("Hobbies", "happiness"),
+        ("Lesson planning", "teaching score"),
+        ("Grades", "Lesson planning")
+    ],
+    utility_edges=[
+        ("Bills", "happiness"),
+        ("Time grading", "wellness"),
+        ("Time grading", "teaching score"),
+        ("Family time", "wellness"),
+        ("Hobbies", "happiness"),
+        ("Lesson planning", "teaching score")
+    ],
+    utility_vars={"teaching score", "happiness", "wellness"},
+    reflective_vars={"Hobbies", "Time grading", "Family time", "Time grading"},
+    chance_vars={"Pay", "Bills"},
+    glue_vars={}, #if no agent treat glue as chance var / dict key = object, val = variable
+    reward_func=reward,
+    fixed_evidence={"Pay": 1},
+)
+
 x = CausalLearningAgent(
     sampling_edges=[
         ("SES", "Tutoring"),
@@ -989,6 +1026,7 @@ x = CausalLearningAgent(
         ("SES", "Exercise"),
         ("ECs", "Time studying"),
         ("Time studying", "Sleep"),
+        ("Teaching score", "Time studying")
     ],
     utility_edges=[
         ("Time studying", "grades"),
@@ -1001,7 +1039,7 @@ x = CausalLearningAgent(
     utility_vars={"grades", "social", "health"},
     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
     chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
+    glue_vars={},
     reward_func=reward,
     fixed_evidence={"SES": 1},
 )
@@ -1255,6 +1293,98 @@ struct_10: CausalLearningAgent = CausalLearningAgent(
     {},
 )
 
+
+def train_2_layer(self, other: "CausalLearningAgent", t_iters: int, s_iters: int):
+    student = x
+    teacher.add_glue_dict(student, "grades")
+    student.add_glue_dict(teacher, "Teaching score")
+    
+    """
+        Train the agent for a specified number of iterations using Simulated Annealing
+
+        Parameters
+        ----------
+        iterations : int
+            Number of iterations to train the agent for.
+    """
+    while s_iters > 0:
+        utility_to_adjust: set[str] = set()
+        student.glue_vars
+        if len(self.memory) > 0:
+            for var, ema in self.ema.items():
+                new_ema = (1 - self.ema_alpha) * (
+                    ema + self.ema_alpha * self.memory[-1].average_reward[var]
+                )
+                self.ema[var] = new_ema
+                if new_ema < self.threshold:
+                    utility_to_adjust.add(var)
+
+        tweak_var: str = random.choice(
+            list(utility_to_adjust | self.reflective_vars)
+        )
+        if tweak_var in utility_to_adjust:
+            adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
+            adjusted_weights[tweak_var] *= self.downweigh_factor
+            adjusted_weights = normalize(adjusted_weights)
+
+            normal_time_step: TimeStep = self.time_step(
+                self.fixed_assignment, self.weights, self.sample_num
+            )
+            weight_adjusted_time_step: TimeStep = self.time_step(
+                self.fixed_assignment, adjusted_weights, self.sample_num
+            )
+
+            delta: float = sum(
+                weight_adjusted_time_step.average_reward.values()
+            ) - sum(normal_time_step.average_reward.values())
+
+            if delta >= 0 or random.random() <= np.exp(
+                -abs(delta) / self.temperature
+            ):
+                self.memory.append(weight_adjusted_time_step)
+                self.weights = adjusted_weights
+        else:
+            true_reward: float = 0
+            random_assignment: int = random.randint(
+                0, self.card_dict[tweak_var] - 1
+            )
+
+            normal_time_step = self.time_step(
+                self.fixed_assignment, self.weights, self.sample_num
+            )
+            interventional_time_step: TimeStep = self.time_step(
+                self.fixed_assignment,
+                self.weights,
+                self.sample_num,
+                {tweak_var: random_assignment},
+            )
+            delta = sum(interventional_time_step.average_reward.values()) - sum(
+                normal_time_step.average_reward.values()
+            )
+
+            if delta >= 0 or random.random() <= np.exp(
+                -abs(delta) / self.temperature
+            ):
+                self.memory.append(interventional_time_step)
+                filtered_df: pd.DataFrame = interventional_time_step.memory
+                for var, value in interventional_time_step.average_sample.items():
+                    filtered_df = filtered_df[filtered_df[var] == value]
+                for reward_signal in self.get_utilities_from_reflective(tweak_var):
+                    true_reward += filtered_df[reward_signal].sum()
+                adjusted_cpt = self.nudge_cpt(
+                    self.sampling_model.get_cpds(tweak_var),
+                    interventional_time_step.average_sample,
+                    self.alpha,
+                    true_reward,
+                )
+                self.sampling_model.remove_cpds(
+                    self.sampling_model.get_cpds(tweak_var)
+                )
+                self.sampling_model.add_cpds(adjusted_cpt)
+
+            self.temperature *= 0.99
+            iterations -= 1
+        
 
 x.train(500, "SA")
 y.train(500, "SA")
