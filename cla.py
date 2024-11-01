@@ -114,6 +114,7 @@ class CausalLearningAgent:
         self.u_hat_models: dict[str, SN] = {}
         for utility in self.utility_vars:
             self.u_hat_models[utility] = SN(self.structural_model.get_parents(utility), 1, 1)
+        self.inference = CausalInference(self.sampling_model)
 
         for cpt in cpts:
             self.sampling_model.add_cpds(cpt)
@@ -618,10 +619,12 @@ class CausalLearningAgent:
                 #     self.sample_num,
                 #     {tweak_var: random_assignment},
                 # )
+                for tweak_dir in self.card_dict[tweak_var]:
+                    reward: float = 0
+                    for utility in self.utility_vars:
+                        for parent in self.structural_model.get_parents(utility):
+                            self.inference.query(variables="parent", do={tweak_var : tweak_dir}) 
 
-                for i in range(self.card_dict[tweak_var]):
-                    
-                    for parent in self.structural_model.get_parents(tweak_var):
                         
 
                 normal_rewards = self.calculate_expected_reward(normal_time_step.average_sample, normal_time_step.average_reward)
