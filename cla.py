@@ -11,6 +11,8 @@ from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from pgmpy.factors.discrete import DiscreteFactor
 from pgmpy.models import BayesianNetwork  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
+from types import UnionType
+from simple_net import SimpleNet as SN
 
 warnings.filterwarnings("ignore")
 
@@ -35,6 +37,7 @@ class CausalLearningAgent:
         sample_num: int = 100,
         alpha: float = 0.01,
         ema_alpha: float = 0.1,
+        ema_utility: float = 1.0,
     ) -> None:
         """
         Initializes two Bayesian Networks, one for sampling and one to maintain structure. Also initializes a number of other variables to be used in the learning process.
@@ -75,7 +78,8 @@ class CausalLearningAgent:
             EMA adjustment rate, by default 0.1
         """
         self.sampling_model: BayesianNetwork = BayesianNetwork(sampling_edges)
-        self.sampling_model.add_nodes_from(chance_vars | reflective_vars | glue_vars)
+        self.sampling_model.add_nodes_from(
+            chance_vars | reflective_vars | glue_vars)
         self.utility_edges: list[tuple[str, str]] = utility_edges
         self.memory: list[TimeStep] = []
         self.utility_vars: set[str] = utility_vars
@@ -91,8 +95,8 @@ class CausalLearningAgent:
         self.structural_model.add_nodes_from(self.utility_vars)
         self.structural_model.add_edges_from(utility_edges)
 
-        self.reward_attr_model = self.structural_model.do(self.reflective_vars)
-        self.inference_model = self.structural_model.do(self.non_utility_vars)
+        self.reward_attr_model = copy.deepcopy(self.structural_model)
+        self.reward_attr_model.do(self.reflective_vars, True)
 
         self.sample_num: int = sample_num
         self.alpha: float = alpha
@@ -100,12 +104,16 @@ class CausalLearningAgent:
         self.threshold: float = threshold
         self.temperature: float = temperature
         self.downweigh_factor: float = downweigh_factor
-        self.ema: dict[str, float] = {key: 1 for key in self.utility_vars}
+        self.ema: dict[str, float] = {key: ema_utility for key in self.utility_vars}
         if not weights:
             self.weights: dict[str, float] = Counter(
                 {key: 1 / len(self.utility_vars) for key in self.utility_vars}
             )
         self.reward_func = reward_func
+        self.cum_memory: pd.DataFrame
+        self.u_hat_models: dict[str, SN] = {}
+        for utility in self.utility_vars:
+            self.u_hat_models[utility] = SN(self.structural_model.get_parents(utility), 1, 1)
 
         for cpt in cpts:
             self.sampling_model.add_cpds(cpt)
@@ -115,7 +123,11 @@ class CausalLearningAgent:
             for key in self.reflective_vars
         }
 
-        self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
+        self.original_model: BayesianNetwork = copy.deepcopy(
+            self.sampling_model)
+
+        self.parameters: dict[str, UnionType[float, int]] = {"sample_num": self.sample_num, "alpha": self.alpha, "ema_alpha": self.ema_alpha,
+                                                             "threshold": self.threshold, "temperature": self.temperature, "downweigh_factor": self.downweigh_factor, "ema": self.ema}
 
     def get_cpts(self) -> list[TabularCPD]:
         """
@@ -175,8 +187,8 @@ class CausalLearningAgent:
         """
         Displays the memory of the agent
         """
-        for time_step in self.memory:
-            print(time_step)
+        for _, normal_time_step in self.memory:
+            print(normal_time_step)
             print("\n")
 
     # def display_weights(self) -> None:
@@ -187,7 +199,7 @@ class CausalLearningAgent:
     #         print(f"Iteration {time_step}:")
     #         print(weights)
     #         print("\n")
-# 
+#
     def display_cpts(self) -> None:
         """
         Displays the CPDs of the sampling model.
@@ -286,7 +298,7 @@ class CausalLearningAgent:
         """
         plot_data: dict[str, list[float]] = {}
 
-        for time_step in self.memory:
+        for _, time_step in self.memory:
             for key, value in time_step.average_reward.items():
                 if key not in plot_data:
                     plot_data[key] = []
@@ -300,6 +312,26 @@ class CausalLearningAgent:
         plt.title("Perceived reward at iteration t")
         plt.legend()
 
+        # Adjust bottom space: less space between parameters, enough for plot
+        num_params = len(self.parameters)
+        # Adjust to ensure enough space for the plot and params
+        bottom_margin = 0.15 + 0.04 * num_params
+
+        plt.subplots_adjust(bottom=bottom_margin)
+
+        # Dynamically place text under the graph using figure coordinates
+        for i, (param, param_val) in enumerate(self.parameters.items()):
+            # If the parameter is a dictionary, we format it for readability
+            if isinstance(param_val, dict):
+                param_val_str = ', '.join(
+                    [f'{k}: {v}' for k, v in param_val.items()])
+            else:
+                param_val_str = str(param_val)
+
+            # Reduced vertical space between parameters
+            plt.figtext(0.5, bottom_margin - (0.04 * i) - 0.1, f"{param}: {param_val_str}",
+                        ha='center', va='top', wrap=True, fontsize=10, transform=plt.gcf().transFigure)
+
         plt.show()
 
     def plot_memory_against(self, other_cla: "CausalLearningAgent") -> None:
@@ -308,13 +340,13 @@ class CausalLearningAgent:
         """
         plot_data: dict[str, list[float]] = {}
 
-        for time_step in self.memory:
+        for _, time_step in self.memory:
             for key, value in time_step.average_reward.items():
                 if f"original, {key}" not in plot_data:
                     plot_data[f"original, {key}"] = []
                 plot_data[f"original, {key}"].append(value)
 
-        for time_step in other_cla.memory:
+        for _, time_step in other_cla.memory:
             for key, value in time_step.average_reward.items():
                 if f"compared, {key}" not in plot_data:
                     plot_data[f"compared, {key}"] = []
@@ -336,7 +368,7 @@ class CausalLearningAgent:
         """
         plot_data: dict[str, list[float]] = {}
 
-        for time_step in self.memory:
+        for _, time_step in self.memory:
             for key, value in time_step.weights.items():
                 if key not in plot_data:
                     plot_data[key] = []
@@ -366,35 +398,32 @@ class CausalLearningAgent:
             sample associated with reward
         rewards : dict[str, float]
             weighted reward received from sample
+        do : dict[str, int]
+            any do-assignments
 
         Returns
         -------
         dict[str, float]
             expected reward given sample & structure
         """
-
-        inference: CausalInference = CausalInference(self.structural_model)
+        inference: CausalInference = CausalInference(self.sampling_model)
         rewards_queries: dict[str, list[str]] = {}
         reward_probs: dict[str, DiscreteFactor] = {}
-        expected_rewards: dict[str, float] = {}
+        expected_rewards: dict[str, float] = Counter()
 
         for category in rewards.keys():
-            reward_query: list[str] = []
-            for var in self.non_utility_vars:
-                if self.inference_model.is_dconnected(var, category):
-                    reward_query.append(var)
-            rewards_queries[category] = reward_query
+            rewards_queries[category] = self.structural_model.get_parents(category)
 
         for category, connected_vars in rewards_queries.items():
             reward_probs[category] = inference.query(
                 variables=connected_vars,
                 evidence={
-                    var: ass for var, ass in sample.items() if var not in connected_vars
-                },
-            )
+                    var: ass for var, ass in sample.items() if var not in (connected_vars)
+                })
 
         for category, reward in rewards.items():
-            assignment = {var: sample[var] for var in rewards_queries[category]}
+            assignment = {var: sample[var]
+                          for var in rewards_queries[category]}
             expected_rewards[category] += reward * reward_probs[category].get_value(
                 **assignment
             )
@@ -508,7 +537,8 @@ class CausalLearningAgent:
 
         tuple_indices: tuple[int, ...] = tuple(indices)
 
-        values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+        values[tuple_indices] += values[tuple_indices] * \
+            increase_factor * reward
 
         sum_values: list = np.sum(values, axis=0)
         normalized_values: list = values / sum_values
@@ -535,8 +565,9 @@ class CausalLearningAgent:
             utility_to_adjust: set[str] = set()
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
-                    new_ema = (1 - self.ema_alpha) * (
-                        ema + self.ema_alpha * self.memory[-1].average_reward[var]
+                    new_ema = ((1 - self.ema_alpha) * (
+                        ema) + (self.ema_alpha *
+                                self.memory[-1][1].average_reward[var])
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
@@ -545,14 +576,18 @@ class CausalLearningAgent:
             tweak_var: str = random.choice(
                 list(utility_to_adjust | self.reflective_vars)
             )
+            normal_time_step: TimeStep = self.time_step(
+                self.fixed_assignment, self.weights, self.sample_num
+            )
+            for util, model in self.u_hat_models.items():
+                model.train_model(normal_time_step.memory, self.structural_model.get_parents(util), util, 1000)
+            
             if tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
+                adjusted_weights: dict[str,
+                                       float] = copy.deepcopy(self.weights)
                 adjusted_weights[tweak_var] *= self.downweigh_factor
                 adjusted_weights = normalize(adjusted_weights)
 
-                normal_time_step: TimeStep = self.time_step(
-                    self.fixed_assignment, self.weights, self.sample_num
-                )
                 weight_adjusted_time_step: TimeStep = self.time_step(
                     self.fixed_assignment, adjusted_weights, self.sample_num
                 )
@@ -562,34 +597,42 @@ class CausalLearningAgent:
                 ) - sum(normal_time_step.average_reward.values())
 
                 if delta >= 0 or random.random() <= np.exp(
-                    -abs(delta) / self.temperature
+                    (-1 * delta) / self.temperature
                 ):
-                    self.memory.append(weight_adjusted_time_step)
+                    self.memory.append((
+                        weight_adjusted_time_step, weight_adjusted_time_step))
                     self.weights = adjusted_weights
+                else:
+                    self.memory.append((
+                        normal_time_step, normal_time_step))
             else:
                 true_reward: float = 0
-                random_assignment: int = random.randint(
-                    0, self.card_dict[tweak_var] - 1
-                )
+                # random_assignment: int = random.randint(
+                #     0, self.card_dict[tweak_var] - 1
+                # )
 
-                normal_time_step = self.time_step(
-                    self.fixed_assignment, self.weights, self.sample_num
-                )
-                interventional_time_step: TimeStep = self.time_step(
-                    self.fixed_assignment,
-                    self.weights,
-                    self.sample_num,
-                    {tweak_var: random_assignment},
-                )
-                delta = sum(interventional_time_step.average_reward.values()) - sum(
-                    normal_time_step.average_reward.values()
+                
+                # interventional_time_step: TimeStep = self.time_step(
+                #     self.fixed_assignment,
+                #     self.weights,
+                #     self.sample_num,
+                #     {tweak_var: random_assignment},
+                # )
+
+                for i in range(self.card_dict[tweak_var]):
+                    
+                    for parent in self.structural_model.get_parents(tweak_var):
+                        
+
+                normal_rewards = self.calculate_expected_reward(normal_time_step.average_sample, normal_time_step.average_reward)
+                delta = sum(interventional_rewards.values()) - sum(
+                    normal_rewards.values()
                 )
 
                 if delta >= 0 or random.random() <= np.exp(
-                    -abs(delta) / self.temperature
+                    (-1 * delta) / self.temperature
                 ):
-                    self.memory.append(interventional_time_step)
-                    filtered_df: pd.DataFrame = interventional_time_step.memory
+                    filtered_df: pd.DataFrame = copy.deepcopy(interventional_time_step.memory)
                     for var, value in interventional_time_step.average_sample.items():
                         filtered_df = filtered_df[filtered_df[var] == value]
                     for reward_signal in self.get_utilities_from_reflective(tweak_var):
@@ -604,6 +647,10 @@ class CausalLearningAgent:
                         self.sampling_model.get_cpds(tweak_var)
                     )
                     self.sampling_model.add_cpds(adjusted_cpt)
+                    self.memory.append((interventional_time_step, self.time_step(
+                        self.fixed_assignment, self.weights, self.sample_num)))
+                else:
+                    self.memory.append((normal_time_step, normal_time_step))
 
                 self.temperature *= 0.99
                 iterations -= 1
@@ -624,14 +671,16 @@ class CausalLearningAgent:
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (
-                        ema + self.ema_alpha * self.memory[-1].average_reward[var]
+                        ema + self.ema_alpha *
+                        self.memory[-1][1].average_reward[var]
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
                         utility_to_adjust.add(var)
 
             for tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
+                adjusted_weights: dict[str,
+                                       float] = copy.deepcopy(self.weights)
                 adjusted_weights[tweak_var] *= self.downweigh_factor
                 adjusted_weights = normalize(adjusted_weights)
 
@@ -653,15 +702,15 @@ class CausalLearningAgent:
                     )
 
             best_timestep: TimeStep = max(
-                time_steps, key=lambda time_step: sum(time_step.average_reward.values())
+                time_steps, key=lambda time_step: sum(
+                    time_step.average_reward.values())
             )
 
             if best_timestep.weights != self.weights:
-                self.memory.append(best_timestep)
+                self.memory.append((best_timestep, best_timestep))
                 self.weights = best_timestep.weights
             else:
                 true_reward: float = 0
-                self.memory.append(best_timestep)
                 filtered_df: pd.DataFrame = best_timestep.memory
                 for var, value in best_timestep.average_sample.items():
                     filtered_df = filtered_df[filtered_df[var] == value]
@@ -679,6 +728,8 @@ class CausalLearningAgent:
                     self.sampling_model.get_cpds(best_timestep.tweak_var)
                 )
                 self.sampling_model.add_cpds(adjusted_cpt)
+                self.memory.append((best_timestep, self.time_step(
+                    self.fixed_assignment, self.weights, self.sample_num)))
 
             iterations -= 1
 
@@ -698,7 +749,7 @@ class CausalLearningAgent:
         """
         dependent_utility_vars: list[str] = []
         for utility in self.utility_vars:
-            if self.structural_model.is_dconnected(reflective_var, utility):
+            if self.reward_attr_model.is_dconnected(reflective_var, utility):
                 dependent_utility_vars.append(utility)
         return dependent_utility_vars
 
@@ -717,7 +768,8 @@ class CausalLearningAgent:
             The CPD as a DataFrame.
         """
         levels: list[range] = [range(card) for card in cpd.cardinality]
-        index: pd.MultiIndex = pd.MultiIndex.from_product(levels, names=cpd.variables)
+        index: pd.MultiIndex = pd.MultiIndex.from_product(
+            levels, names=cpd.variables)
 
         df: pd.DataFrame = pd.DataFrame(
             cpd.values.flatten(), index=index, columns=["Delta"]
@@ -909,7 +961,8 @@ def default_reward(
 
 
 list_of_cpts = [
-    TabularCPD(variable="SES", variable_card=3, values=[[0.29], [0.52], [0.19]]),
+    TabularCPD(variable="SES", variable_card=3,
+               values=[[0.29], [0.52], [0.19]]),
     TabularCPD(variable="Motivation", variable_card=2, values=[[0.5], [0.5]]),
     TabularCPD(
         variable="Tutoring",
@@ -1057,8 +1110,10 @@ struct_2: CausalLearningAgent = CausalLearningAgent(
     sampling_edges=[("chance_1", "refl_1"), ("chance_2", "refl_1")],
     utility_edges=[("refl_1", "util_1")],
     cpts=[
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_2", variable_card=2,
+                   values=[[0.5], [0.5]]),
         TabularCPD(
             variable="refl_1",
             variable_card=2,
@@ -1101,7 +1156,8 @@ struct_4: CausalLearningAgent = CausalLearningAgent(
     [("chance_1", "refl_1")],
     [("refl_1", "util_1")],
     [
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
         TabularCPD(
             variable="refl_1",
             variable_card=2,
@@ -1143,7 +1199,8 @@ struct_6 = CausalLearningAgent(
     [("chance_1", "refl_1"), ("chance_1", "refl_2")],
     [("refl_1", "util_1"), ("refl_2", "util_1")],
     [
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
         TabularCPD(
             variable="refl_1",
             variable_card=2,
@@ -1200,8 +1257,10 @@ struct_8: CausalLearningAgent = CausalLearningAgent(
     [("refl_1", "util_1"), ("chance_1", "util_1"), ("chance_2", "util_1")],
     [
         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_2", variable_card=2,
+                   values=[[0.5], [0.5]]),
     ],
     {"util_1"},
     {"refl_1"},
@@ -1216,7 +1275,8 @@ struct_9: CausalLearningAgent = CausalLearningAgent(
     [("refl_1", "util_1"), ("chance_1", "util_1"), ("refl_2", "util_1")],
     [
         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
         TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
     ],
     {"util_1"},
@@ -1231,7 +1291,8 @@ struct_10: CausalLearningAgent = CausalLearningAgent(
     [("chance_1", "refl_1"), ("refl_1", "chance_2")],
     [("chance_2", "util_1")],
     [
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
         TabularCPD(
             variable="refl_1",
             variable_card=2,
@@ -1255,86 +1316,150 @@ struct_10: CausalLearningAgent = CausalLearningAgent(
     {},
 )
 
+struct_11: CausalLearningAgent = CausalLearningAgent(
+    [],
+    [("refl_1", "util_1"), ("chance_1", "util_1")],
+    [
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="chance_1", variable_card=2,
+                   values=[[0.5], [0.5]]),
+    ],
+    {"util_1"},
+    {"refl_1"},
+    {"chance_1"},
+    set(),
+    default_reward,
+    {},
+)
+
+struct_13: CausalLearningAgent = CausalLearningAgent(
+    [],
+    [("refl_1", "util_1"), ("refl_2", "util_1")],
+    [
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="refl_2", variable_card=2,
+                   values=[[0.5], [0.5]]),
+    ],
+    {"util_1"},
+    {"refl_1", "refl_2"},
+    set(),
+    set(),
+    default_reward,
+    {},
+)
+
+print('hello')
+
 print('training x now')
-x.train(100, "SA")
-print('training y now')
-y.train(100, "SA")
-print('training s1 now')
-struct_1.train(70, "SA")
-print('training s2 now')
-struct_2.train(70, "SA")
-print('training s3 now')
-struct_3.train(70, "SA")
-print('training s4 now')
-struct_4.train(70, "SA")
-print('training s5 now')
-struct_5.train(70, "SA")
-print('training s6 now')
-struct_6.train(70, "SA")
-print('training s7 now')
-struct_7.train(70, "SA")
-print('training s8 now')
-struct_8.train(70, "SA")
-print('training s9 now')
-struct_9.train(70, "SA")
-print('training s10 now')
-struct_10.train(70, "SA")
+x.train(150, "SA")
+# print('training y now')
+# y.train(150, "SA")
+# print('training s1 now')
+# struct_1.train(50, "SA")
+# print('training s2 now')
+# struct_2.train(50, "SA")
+# print('training s3 now')
+# struct_3.train(50, "SA")
+# print('training s4 now')
+# struct_4.train(50, "SA")
+# print('training s5 now')
+# struct_5.train(50, "SA")
+# print('training s6 now')
+# struct_6.train(50, "SA")
+# print('training s7 now')
+# struct_7.train(50, "SA")
+# print('training s8 now')
+# struct_8.train(50, "SA")
+# print('training s9 now')
+# struct_9.train(50, "SA")
+# print('training s10 now')
+# struct_10.train(50, "SA")
+# print('training s11 now')
+# struct_11.train(50, "SA")
+# print('training s13 now')
+# struct_13.train(50, "SA")
 
-x.plot_memory()
-y.plot_memory()
-struct_1.plot_memory()
-struct_2.plot_memory()
-struct_3.plot_memory()
-struct_4.plot_memory()
-struct_5.plot_memory()
-struct_6.plot_memory()
-struct_7.plot_memory()
-struct_8.plot_memory()
-struct_9.plot_memory()
-struct_10.plot_memory()
 
-x.plot_weights()
-y.plot_weights()
-struct_1.plot_weights()
-struct_2.plot_weights()
-struct_3.plot_weights()
-struct_4.plot_weights()
-struct_5.plot_weights()
-struct_6.plot_weights()
-struct_7.plot_weights()
-struct_8.plot_weights()
-struct_9.plot_weights()
-struct_10.plot_weights()
 
-x.plot_memory_against(y)
-struct_2.plot_memory_against(struct_3)
-struct_4.plot_memory_against(struct_5)
-struct_6.plot_memory_against(struct_7)
-struct_8.plot_memory_against(struct_9)
+# x.plot_memory()
+# y.plot_memory()
+# struct_1.plot_memory()
+# struct_2.plot_memory()
+# struct_3.plot_memory()
+# struct_4.plot_memory()
+# struct_5.plot_memory()
+# struct_6.plot_memory()
+# struct_7.plot_memory()
+# struct_8.plot_memory()
+# struct_9.plot_memory()
+# struct_10.plot_memory()
+# struct_11.plot_memory()
+# struct_13.plot_memory()
 
-x.write_cpds_to_csv(x.sampling_model.get_cpds(), "x", "data")
-y.write_cpds_to_csv(y.sampling_model.get_cpds(), "y", "data")
-struct_1.write_cpds_to_csv(struct_1.sampling_model.get_cpds(), "struct_1", "data")
-struct_2.write_cpds_to_csv(struct_2.sampling_model.get_cpds(), "struct_2", "data")
-struct_3.write_cpds_to_csv(struct_3.sampling_model.get_cpds(), "struct_3", "data")
-struct_4.write_cpds_to_csv(struct_4.sampling_model.get_cpds(), "struct_4", "data")
-struct_5.write_cpds_to_csv(struct_5.sampling_model.get_cpds(), "struct_5", "data")
-struct_6.write_cpds_to_csv(struct_6.sampling_model.get_cpds(), "struct_6", "data")
-struct_7.write_cpds_to_csv(struct_7.sampling_model.get_cpds(), "struct_7", "data")
-struct_8.write_cpds_to_csv(struct_8.sampling_model.get_cpds(), "struct_8", "data")
-struct_9.write_cpds_to_csv(struct_9.sampling_model.get_cpds(), "struct_9", "data")
-struct_10.write_cpds_to_csv(struct_10.sampling_model.get_cpds(), "struct_10", "data")
+# x.plot_weights()
+# y.plot_weights()
+# struct_1.plot_weights()
+# struct_2.plot_weights()
+# struct_3.plot_weights()
+# struct_4.plot_weights()
+# struct_5.plot_weights()
+# struct_6.plot_weights()
+# struct_7.plot_weights()
+# struct_8.plot_weights()
+# struct_9.plot_weights()
+# struct_10.plot_weights()
+# struct_11.plot_weights()
+# struct_13.plot_weights()
 
-x.write_delta_cpd_to_csv(x.sampling_model.get_cpds(), "x", "data")
-y.write_delta_cpd_to_csv(y.sampling_model.get_cpds(), "y", "data")
-struct_1.write_delta_cpd_to_csv(struct_1.sampling_model.get_cpds(), "struct_1", "data")
-struct_2.write_delta_cpd_to_csv(struct_2.sampling_model.get_cpds(), "struct_2", "data")
-struct_3.write_delta_cpd_to_csv(struct_3.sampling_model.get_cpds(), "struct_3", "data")
-struct_4.write_delta_cpd_to_csv(struct_4.sampling_model.get_cpds(), "struct_4", "data")
-struct_5.write_delta_cpd_to_csv(struct_5.sampling_model.get_cpds(), "struct_5", "data")
-struct_6.write_delta_cpd_to_csv(struct_6.sampling_model.get_cpds(), "struct_6", "data")
-struct_7.write_delta_cpd_to_csv(struct_7.sampling_model.get_cpds(), "struct_7", "data")
-struct_8.write_delta_cpd_to_csv(struct_8.sampling_model.get_cpds(), "struct_8", "data")
-struct_9.write_delta_cpd_to_csv(struct_9.sampling_model.get_cpds(), "struct_9", "data")
-struct_10.write_delta_cpd_to_csv(struct_10.sampling_model.get_cpds(), "struct_10", "data")
+# x.plot_memory_against(y)
+# struct_2.plot_memory_against(struct_3)
+# struct_4.plot_memory_against(struct_5)
+# struct_6.plot_memory_against(struct_7)
+# struct_8.plot_memory_against(struct_9)
+# struct_11.plot_memory_against(struct_13)
 
+# x.write_cpds_to_csv(x.sampling_model.get_cpds(), "x", "data")
+# y.write_cpds_to_csv(y.sampling_model.get_cpds(), "y", "data")
+# struct_1.write_cpds_to_csv(
+#     struct_1.sampling_model.get_cpds(), "struct_1", "data")
+# struct_2.write_cpds_to_csv(
+#     struct_2.sampling_model.get_cpds(), "struct_2", "data")
+# struct_3.write_cpds_to_csv(
+#     struct_3.sampling_model.get_cpds(), "struct_3", "data")
+# struct_4.write_cpds_to_csv(
+#     struct_4.sampling_model.get_cpds(), "struct_4", "data")
+# struct_5.write_cpds_to_csv(
+#     struct_5.sampling_model.get_cpds(), "struct_5", "data")
+# struct_6.write_cpds_to_csv(
+#     struct_6.sampling_model.get_cpds(), "struct_6", "data")
+# struct_7.write_cpds_to_csv(
+#     struct_7.sampling_model.get_cpds(), "struct_7", "data")
+# struct_8.write_cpds_to_csv(
+#     struct_8.sampling_model.get_cpds(), "struct_8", "data")
+# struct_9.write_cpds_to_csv(
+#     struct_9.sampling_model.get_cpds(), "struct_9", "data")
+# struct_10.write_cpds_to_csv(
+#     struct_10.sampling_model.get_cpds(), "struct_10", "data")
+
+# x.write_delta_cpd_to_csv(x.sampling_model.get_cpds(), "x", "data")
+# y.write_delta_cpd_to_csv(y.sampling_model.get_cpds(), "y", "data")
+# struct_1.write_delta_cpd_to_csv(
+#     struct_1.sampling_model.get_cpds(), "struct_1", "data")
+# struct_2.write_delta_cpd_to_csv(
+#     struct_2.sampling_model.get_cpds(), "struct_2", "data")
+# struct_3.write_delta_cpd_to_csv(
+#     struct_3.sampling_model.get_cpds(), "struct_3", "data")
+# struct_4.write_delta_cpd_to_csv(
+#     struct_4.sampling_model.get_cpds(), "struct_4", "data")
+# struct_5.write_delta_cpd_to_csv(
+#     struct_5.sampling_model.get_cpds(), "struct_5", "data")
+# struct_6.write_delta_cpd_to_csv(
+#     struct_6.sampling_model.get_cpds(), "struct_6", "data")
+# struct_7.write_delta_cpd_to_csv(
+#     struct_7.sampling_model.get_cpds(), "struct_7", "data")
+# struct_8.write_delta_cpd_to_csv(
+#     struct_8.sampling_model.get_cpds(), "struct_8", "data")
+# struct_9.write_delta_cpd_to_csv(
+#     struct_9.sampling_model.get_cpds(), "struct_9", "data")
+# struct_10.write_delta_cpd_to_csv(
+#     struct_10.sampling_model.get_cpds(), "struct_10", "data")
