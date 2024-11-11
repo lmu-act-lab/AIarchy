@@ -562,7 +562,7 @@ class CausalLearningAgent:
 
         cpd.values = normalized_values
         return cpd
-    
+
     def nudge_cpt_new(
         self,
         cpd: TabularCPD,
@@ -590,16 +590,25 @@ class CausalLearningAgent:
             New CPT with nudged value.
         """
         values: np.ndarray = cpd.values
-        indices: list[int] = [evidence[variable] for variable in cpd.variables]
+        tweak_var = next(iter(tweak_dict))
+        parents = self.structural_model.get_parents(tweak_var)
+        conditions: list[dict[str, int]] = [
+            {variable: value for variable, value in zip(parents, values)}
+            for values in product(*[range(card) for card in self.card_dict[parents]])
+        ]
 
-        tuple_indices: tuple[int, ...] = tuple(indices)
+        for condition in conditions:
+            condition[tweak_var] = tweak_dict[tweak_var]
+            indices: list[int] = [condition[variable] for variable in cpd.variables]
 
-        values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+            tuple_indices: tuple[int, ...] = tuple(indices)
 
-        sum_values: list = np.sum(values, axis=0)
-        normalized_values: list = values / sum_values
+            values[tuple_indices] += values[tuple_indices] * increase_factor * reward
 
-        cpd.values = normalized_values
+            sum_values: list = np.sum(values, axis=0)
+            normalized_values: list = values / sum_values
+
+            cpd.values = normalized_values
         return cpd
 
     def train(self, iterations: int, style: str) -> None:
@@ -676,7 +685,7 @@ class CausalLearningAgent:
                 #     self.sample_num,
                 #     {tweak_var: random_assignment},
                 # )
-                
+
                 # Compare every possible value for our random tweak variable
                 for tweak_dir in range(self.card_dict[tweak_var]):
                     reward: dict[str, float] = Counter()
@@ -703,7 +712,7 @@ class CausalLearningAgent:
                                 )
                             }
                             reward[utility] += (
-                            # Get probability of parent values given tweak direction
+                                # Get probability of parent values given tweak direction
                                 self.inference.query(
                                     variables=list(parent_dict.keys()),
                                     do={tweak_var: tweak_dir},
@@ -728,9 +737,7 @@ class CausalLearningAgent:
                 normal_rewards = self.calculate_expected_reward(
                     normal_time_step.average_sample, normal_time_step.average_reward
                 )
-                delta = interventional_reward - sum(
-                    normal_rewards.values()
-                )
+                delta = interventional_reward - sum(normal_rewards.values())
 
                 if delta >= 0 or random.random() <= np.exp(
                     (-1 * delta) / self.temperature
