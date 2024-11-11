@@ -35,15 +35,18 @@ class SimpleNet(nn.Module):
 
         print(f'Training complete. Final loss: {loss.item()}')
 
-    def get_prediction(self, input_data):
+    def get_prediction(self, input_data, input_vars):
         # Ensure the model is in evaluation mode
         self.eval()
 
         # Convert input data to tensor if it's a DataFrame or list
-        if isinstance(input_data, pd.DataFrame) or isinstance(input_data, list):
-            input_tensor = torch.tensor(input_data, dtype=torch.float32)
-        else:
-            input_tensor = input_data  # Assumes input is already a tensor
+        if isinstance(input_data, pd.DataFrame):
+            input_data = input_data[input_vars].values
+        elif isinstance(input_data, dict):
+        # Extract values in the order of input_vars
+            input_data = [input_data[var] for var in input_vars]
+
+        input_tensor = torch.tensor(input_data, dtype=torch.float32)
 
         # Add batch dimension if input is a single instance
         if input_tensor.ndim == 1:
