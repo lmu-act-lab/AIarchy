@@ -1079,7 +1079,7 @@ def train(mc_rep: int, style: str, agents: list[CausalLearningAgent]) -> list[Ca
                 agent.train_ME(mc_rep)
     return agents
 
-def plot_agents(agents: list[CausalLearningAgent]) -> None:
+def plot_monte_carlo(agents: list[CausalLearningAgent]) -> None:
     """
     Plots the average reward across agents.
 
@@ -1614,3 +1614,8 @@ x.train(150, "SA")
 #     struct_9.sampling_model.get_cpds(), "struct_9", "data")
 # struct_10.write_delta_cpd_to_csv(
 #     struct_10.sampling_model.get_cpds(), "struct_10", "data")
+
+# Monte carlo stuff
+x_agents = [copy.deepcopy(x) for _ in range(100)]
+train(150, "SA", x_agents)
+plot_monte_carlo(x_agents)
