@@ -611,12 +611,6 @@ class CausalLearningAgent:
             cpd.values = normalized_values
         return cpd
 
-    def train(self, iterations: int, style: str) -> None:
-        if style == "SA":
-            return self.train_SA(iterations)
-        if style == "ME":
-            return self.train_ME(iterations)
-
     def train_SA(self, iterations: int) -> None:
         """
         Train the agent for a specified number of iterations using Simulated Annealing
@@ -750,9 +744,15 @@ class CausalLearningAgent:
                     # for reward_signal in self.get_utilities_from_reflective(tweak_var):
                     #     true_reward += filtered_df[reward_signal].sum()
 
-                    adjusted_cpt = self.nudge_cpt(
+                    # adjusted_cpt = self.nudge_cpt(
+                    #     self.sampling_model.get_cpds(tweak_var),
+                    #     interventional_time_step.average_sample,
+                    #     self.alpha,
+                    #     interventional_reward,
+                    # )
+                    adjusted_cpt = self.nudge_cpt_new(
                         self.sampling_model.get_cpds(tweak_var),
-                        interventional_time_step.average_sample,
+                        {tweak_var: tweak_val},
                         self.alpha,
                         interventional_reward,
                     )
@@ -1056,6 +1056,50 @@ class TimeStep:
 
         return hash((sample_vars_hash, reward_vars_hash, weights_hash, tweak_var_hash))
 
+def train(mc_rep: int, style: str, agents: list[CausalLearningAgent]) -> list[CausalLearningAgent]:
+    """
+    Trains n agents for a specified number of monte carlo repetitions using a specified style.
+
+    Parameters
+    ----------
+    mc_rep : int
+        Monte Carlo Repetitions.
+    style : str
+        Simulated Annealing/Maximum Exploitation.
+    agents : list[CausalLearningAgent]
+        List of agents to train.
+    """
+
+    match style:
+        case "SA":
+            for agent in agents:
+                agent.train_SA(mc_rep)
+        case "ME":
+            for agent in agents:
+                agent.train_ME(mc_rep)
+    return agents
+
+def plot_agents(agents: list[CausalLearningAgent]) -> None:
+    """
+    Plots the average reward across agents.
+
+    Parameters
+    ----------
+    agents : list[CausalLearningAgent]
+        List of agents to plot.
+    """
+    average_rewards: list[float] = []
+    for iteration in range(len(agents[0].memory)):
+        total_reward = 0
+        for agent in agents:
+            total_reward += sum(agent.memory[iteration].average_reward.values())
+        average_rewards.append(total_reward / len(agents))
+
+    plt.plot(average_rewards)
+    plt.xlabel("Iteration")
+    plt.ylabel("Average Reward")
+    plt.title("Average Reward Across Agents")
+    plt.show()
 
 #! future research
 # * look into bayesian structure learning from data
