@@ -1,13 +1,42 @@
-import matplotlib.pyplot as plt
+from archive.student import Student
+import unittest
+import numpy as np
+import copy
+import warnings
 
-# Sample data
-x = [1, 2, 3, 4, 5]
-y = [2, 4, 6, 8, 10]
+warnings.filterwarnings("ignore")
 
-plt.plot(x, y)
+class TestTraining(unittest.TestCase):
+    def test_init(self):
+        pass
 
-# Add parameters on the right side outside the plot
-plt.text(0.95, 0.5, 'Slope: 2\nIntercept: 0', fontsize=12, verticalalignment='center', horizontalalignment='right')
+    def test_calculate_expected_utility(self):
+        pass
+
+    def test_u_hat_init(self):
+        pass
+
+    def test_u_hat_training(self):
+        pass
+
+    
+    
+    def test_time_step_init(self):
+        pass
+
+    def test_CPT_nudged(self):
+        pass
+
+    def test_weight_changed(self):
+        pass
+    
+    def test_monte_carlo_average(self):
+        pass
 
 
-plt.show()
+    
+
+
+
+if __name__ == "__main__":
+    unittest.main()
