@@ -12,7 +12,7 @@ from pgmpy.factors.discrete import DiscreteFactor
 from pgmpy.models import BayesianNetwork  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
 from types import UnionType
-from simple_net import SimpleNet as SN
+from cla_neural_network import CLANeuralNetwork as CLANN
 from itertools import product
 
 warnings.filterwarnings("ignore")
@@ -111,10 +111,11 @@ class CausalLearningAgent:
             )
         self.reward_func = reward_func
         self.cum_memory: pd.DataFrame
-        self.u_hat_models: dict[str, SN] = {}
+        self.u_hat_models: dict[str, CLANN] = {}
+
         for utility in self.utility_vars:
-            self.u_hat_models[utility] = SN(
-                self.structural_model.get_parents(utility), 1, 1
+            self.u_hat_models[utility] = CLANN(
+                self.structural_model.get_parents(utility), [utility]
             )
         self.inference = CausalInference(self.sampling_model)
 
@@ -123,7 +124,7 @@ class CausalLearningAgent:
 
         self.card_dict: dict[str, int] = {
             key: self.sampling_model.get_cardinality(key)
-            for key in self.reflective_vars
+            for key in (self.reflective_vars | self.chance_vars)
         }
 
         self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
@@ -196,7 +197,7 @@ class CausalLearningAgent:
         """
         Displays the memory of the agent
         """
-        for _, normal_time_step in self.memory:
+        for normal_time_step in self.memory:
             print(normal_time_step)
             print("\n")
 
@@ -307,7 +308,7 @@ class CausalLearningAgent:
         """
         plot_data: dict[str, list[float]] = {}
 
-        for _, time_step in self.memory:
+        for time_step in self.memory:
             for key, value in time_step.average_reward.items():
                 if key not in plot_data:
                     plot_data[key] = []
@@ -356,13 +357,13 @@ class CausalLearningAgent:
         """
         plot_data: dict[str, list[float]] = {}
 
-        for _, time_step in self.memory:
+        for time_step in self.memory:
             for key, value in time_step.average_reward.items():
                 if f"original, {key}" not in plot_data:
                     plot_data[f"original, {key}"] = []
                 plot_data[f"original, {key}"].append(value)
 
-        for _, time_step in other_cla.memory:
+        for time_step in other_cla.memory:
             for key, value in time_step.average_reward.items():
                 if f"compared, {key}" not in plot_data:
                     plot_data[f"compared, {key}"] = []
@@ -384,7 +385,7 @@ class CausalLearningAgent:
         """
         plot_data: dict[str, list[float]] = {}
 
-        for _, time_step in self.memory:
+        for time_step in self.memory:
             for key, value in time_step.weights.items():
                 if key not in plot_data:
                     plot_data[key] = []
@@ -438,6 +439,7 @@ class CausalLearningAgent:
                     for var, ass in sample.items()
                     if var not in (connected_vars)
                 },
+                show_progress=False,
             )
 
         for category, reward in rewards.items():
@@ -498,13 +500,11 @@ class CausalLearningAgent:
             weighted_reward: dict[str, float] = {}
             if do:
                 sample_df = self.sampling_model.simulate(
-                    n_samples=1,
-                    evidence=fixed_evidence,
-                    do=do,
+                    n_samples=1, evidence=fixed_evidence, do=do, show_progress=False
                 )
             else:
                 sample_df = self.sampling_model.simulate(
-                    n_samples=1, evidence=fixed_evidence
+                    n_samples=1, evidence=fixed_evidence, show_progress=False
                 )
             sample_dict: dict[str, int] = sample_df.iloc[0].to_dict()
             rewards: dict[str, float] = self.reward_func(
@@ -571,7 +571,7 @@ class CausalLearningAgent:
         reward: float,
     ) -> TabularCPD:
         """
-        Nudges specific value in CPT.
+        Nudges multiple values in CPT.
 
         Parameters
         ----------
@@ -589,12 +589,19 @@ class CausalLearningAgent:
         TabularCPD
             New CPT with nudged value.
         """
+
         values: np.ndarray = cpd.values
         tweak_var = next(iter(tweak_dict))
         parents = self.structural_model.get_parents(tweak_var)
+
+        # Convert parents to a tuple before using it as a key
+        parents_tuple = tuple(parents)
+
         conditions: list[dict[str, int]] = [
-            {variable: value for variable, value in zip(parents, values)}
-            for values in product(*[range(card) for card in self.card_dict[parents]])
+            {variable: value for variable, value in zip(parents, condition_values)}
+            for condition_values in product(
+                *[range(self.card_dict[parent]) for parent in parents_tuple]
+            )
         ]
 
         for condition in conditions:
@@ -605,10 +612,11 @@ class CausalLearningAgent:
 
             values[tuple_indices] += values[tuple_indices] * increase_factor * reward
 
-            sum_values: list = np.sum(values, axis=0)
-            normalized_values: list = values / sum_values
+        # Corrected the indentation to ensure normalization happens after the loop
+        sum_values: np.ndarray = np.sum(values, axis=0)
+        normalized_values: np.ndarray = values / sum_values
 
-            cpd.values = normalized_values
+        cpd.values = normalized_values
         return cpd
 
     def train_SA(self, iterations: int) -> None:
@@ -621,11 +629,12 @@ class CausalLearningAgent:
             Number of iterations to train the agent for.
         """
         while iterations > 0:
+            print(iterations)
             utility_to_adjust: set[str] = set()
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
                     new_ema = (1 - self.ema_alpha) * (ema) + (
-                        self.ema_alpha * self.memory[-1][1].average_reward[var]
+                        self.ema_alpha * self.memory[-1].average_reward[var]
                     )
                     self.ema[var] = new_ema
                     if new_ema < self.threshold:
@@ -638,12 +647,8 @@ class CausalLearningAgent:
                 self.fixed_assignment, self.weights, self.sample_num
             )
             for util, model in self.u_hat_models.items():
-                model.train_model(
-                    normal_time_step.memory,
-                    self.structural_model.get_parents(util),
-                    util,
-                    1000,
-                )
+                numeric = normal_time_step.memory.apply(pd.to_numeric)
+                model.train(numeric)
 
             if tweak_var in utility_to_adjust:
                 adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
@@ -661,12 +666,7 @@ class CausalLearningAgent:
                 if delta >= 0 or random.random() <= np.exp(
                     (-1 * delta) / self.temperature
                 ):
-                    self.memory.append(
-                        (weight_adjusted_time_step, weight_adjusted_time_step)
-                    )
                     self.weights = adjusted_weights
-                else:
-                    self.memory.append((normal_time_step, normal_time_step))
             else:
                 tweak_val_comparison: list[dict[str, float]] = []
                 # random_assignment: int = random.randint(
@@ -705,28 +705,38 @@ class CausalLearningAgent:
                                     strict=True,
                                 )
                             }
+                            # Tweak var takes precedence over combination of parent values
+                            parent_dict[tweak_var] = tweak_dir
                             reward[utility] += (
                                 # Get probability of parent values given tweak direction
                                 self.inference.query(
-                                    variables=list(parent_dict.keys()),
+                                    variables=[
+                                        key
+                                        for key in parent_dict.keys()
+                                        if key != tweak_var
+                                    ],
                                     do={tweak_var: tweak_dir},
-                                ).values
-                                # Multiply by u hat (predicted utility) given current combo of parent values
-                                * self.u_hat_models[utility]
-                                .get_prediction(
-                                    parent_dict,
-                                    self.structural_model.get_parents(utility),
+                                    adjustment_set=[],
+                                    show_progress=False,
+                                ).get_value(
+                                    **{
+                                        key: value
+                                        for key, value in parent_dict.items()
+                                        if key != tweak_var
+                                    }
                                 )
-                                .item()
+                                # Multiply by u hat (predicted utility) given current combo of parent values
+                                * self.u_hat_models[utility].predict(
+                                    pd.DataFrame([parent_dict])
+                                )[0, 0]
                             )
                     # Add expected utility to comparison
                     tweak_val_comparison.append(reward)
-
                 tweak_val = tweak_val_comparison.index(
                     max(tweak_val_comparison, key=lambda x: sum(x.values()))
                 )
 
-                interventional_reward = tweak_val_comparison[tweak_val]
+                interventional_reward = sum(tweak_val_comparison[tweak_val].values())
 
                 normal_rewards = self.calculate_expected_reward(
                     normal_time_step.average_sample, normal_time_step.average_reward
@@ -760,19 +770,10 @@ class CausalLearningAgent:
                         self.sampling_model.get_cpds(tweak_var)
                     )
                     self.sampling_model.add_cpds(adjusted_cpt)
-                    self.memory.append(
-                        (
-                            interventional_time_step,
-                            self.time_step(
-                                self.fixed_assignment, self.weights, self.sample_num
-                            ),
-                        )
-                    )
-                else:
-                    self.memory.append((normal_time_step, normal_time_step))
 
-                self.temperature *= 0.99
-                iterations -= 1
+            self.memory.append(normal_time_step)
+            self.temperature *= 0.99
+            iterations -= 1
 
     def train_ME(self, iterations: int) -> None:
         """
@@ -1056,7 +1057,10 @@ class TimeStep:
 
         return hash((sample_vars_hash, reward_vars_hash, weights_hash, tweak_var_hash))
 
-def train(mc_rep: int, style: str, agents: list[CausalLearningAgent]) -> list[CausalLearningAgent]:
+
+def train(
+    mc_rep: int, style: str, agents: list[CausalLearningAgent]
+) -> list[CausalLearningAgent]:
     """
     Trains n agents for a specified number of monte carlo repetitions using a specified style.
 
@@ -1079,6 +1083,7 @@ def train(mc_rep: int, style: str, agents: list[CausalLearningAgent]) -> list[Ca
                 agent.train_ME(mc_rep)
     return agents
 
+
 def plot_monte_carlo(agents: list[CausalLearningAgent]) -> None:
     """
     Plots the average reward across agents.
@@ -1094,12 +1099,12 @@ def plot_monte_carlo(agents: list[CausalLearningAgent]) -> None:
         for agent in agents:
             total_reward += sum(agent.memory[iteration].average_reward.values())
         average_rewards.append(total_reward / len(agents))
-
     plt.plot(average_rewards)
     plt.xlabel("Iteration")
     plt.ylabel("Average Reward")
-    plt.title("Average Reward Across Agents")
+    plt.title(f"Average Reward Across {len(agents)} Agents")
     plt.show()
+
 
 #! future research
 # * look into bayesian structure learning from data
@@ -1500,10 +1505,10 @@ struct_13: CausalLearningAgent = CausalLearningAgent(
     {},
 )
 
-print("hello")
+# print("hello")
 
-print("training x now")
-x.train(150, "SA")
+# print("training x now")
+# x.train(150, "SA")
 # print('training y now')
 # y.train(150, "SA")
 # print('training s1 now')
@@ -1616,6 +1621,87 @@ x.train(150, "SA")
 #     struct_10.sampling_model.get_cpds(), "struct_10", "data")
 
 # Monte carlo stuff
-x_agents = [copy.deepcopy(x) for _ in range(100)]
-train(150, "SA", x_agents)
+x_agents = [copy.deepcopy(x) for _ in range(10)]
+train(100, "SA", x_agents)
+
+
+y_agents = [copy.deepcopy(y) for _ in range(10)]
+train(100, "SA", y_agents)
+
+
+struct_1_agents = [copy.deepcopy(struct_1) for _ in range(10)]
+train(50, "SA", struct_1_agents)
+
+
+struct_2_agents = [copy.deepcopy(struct_2) for _ in range(10)]
+train(50, "SA", struct_2_agents)
+
+
+struct_3_agents = [copy.deepcopy(struct_3) for _ in range(10)]
+train(50, "SA", struct_3_agents)
+
+
+struct_4_agents = [copy.deepcopy(struct_4) for _ in range(10)]
+train(50, "SA", struct_4_agents)
+
+
+struct_5_agents = [copy.deepcopy(struct_5) for _ in range(10)]
+train(50, "SA", struct_5_agents)
+
+
+struct_6_agents = [copy.deepcopy(struct_6) for _ in range(10)]
+train(50, "SA", struct_6_agents)
+
+
+struct_7_agents = [copy.deepcopy(struct_7) for _ in range(10)]
+train(50, "SA", struct_7_agents)
+
+
+struct_8_agents = [copy.deepcopy(struct_8) for _ in range(10)]
+train(50, "SA", struct_8_agents)
+
+
+struct_9_agents = [copy.deepcopy(struct_9) for _ in range(10)]
+train(50, "SA", struct_9_agents)
+
+
+struct_10_agents = [copy.deepcopy(struct_10) for _ in range(10)]
+train(50, "SA", struct_10_agents)
+
+
+struct_11_agents = [copy.deepcopy(struct_11) for _ in range(10)]
+train(50, "SA", struct_11_agents)
+
+
+struct_13_agents = [copy.deepcopy(struct_13) for _ in range(10)]
+train(50, "SA", struct_13_agents)
+
+
+print("x done")
 plot_monte_carlo(x_agents)
+print("y done")
+plot_monte_carlo(y_agents)
+print("struct_1 done")
+plot_monte_carlo(struct_1_agents)
+print("struct_2 done")
+plot_monte_carlo(struct_2_agents)
+print("struct_3 done")
+plot_monte_carlo(struct_3_agents)
+print("struct_4 done")
+plot_monte_carlo(struct_4_agents)
+print("struct_5 done")
+plot_monte_carlo(struct_5_agents)
+print("struct_6 done")
+plot_monte_carlo(struct_6_agents)
+print("struct_7 done")
+plot_monte_carlo(struct_7_agents)
+print("struct_8 done")
+plot_monte_carlo(struct_8_agents)
+print("struct_9 done")
+plot_monte_carlo(struct_9_agents)
+print("struct_10 done")
+plot_monte_carlo(struct_10_agents)
+print("struct_11 done")
+plot_monte_carlo(struct_11_agents)
+print("struct_13 done")
+plot_monte_carlo(struct_13_agents)
