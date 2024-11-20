@@ -415,8 +415,6 @@ class CausalLearningAgent:
             sample associated with reward
         rewards : dict[str, float]
             weighted reward received from sample
-        do : dict[str, int]
-            any do-assignments
 
         Returns
         -------
@@ -441,7 +439,7 @@ class CausalLearningAgent:
                 },
                 show_progress=False,
             )
-
+        
         for category, reward in rewards.items():
             assignment = {var: sample[var] for var in rewards_queries[category]}
             expected_rewards[category] += reward * reward_probs[category].get_value(
@@ -1025,7 +1023,7 @@ class TimeStep:
 
     def get_column_average(self, column_name: str) -> float:
         """
-        Calculate and round the average of a specified column in the memory DataFrame.
+        Calculate the average of a specified column in the memory DataFrame.
 
         Parameters
         ----------
@@ -1621,87 +1619,87 @@ struct_13: CausalLearningAgent = CausalLearningAgent(
 #     struct_10.sampling_model.get_cpds(), "struct_10", "data")
 
 # Monte carlo stuff
-x_agents = [copy.deepcopy(x) for _ in range(10)]
-train(100, "SA", x_agents)
+# x_agents = [copy.deepcopy(x) for _ in range(10)]
+# train(100, "SA", x_agents)
 
 
-y_agents = [copy.deepcopy(y) for _ in range(10)]
-train(100, "SA", y_agents)
+# y_agents = [copy.deepcopy(y) for _ in range(10)]
+# train(100, "SA", y_agents)
 
 
-struct_1_agents = [copy.deepcopy(struct_1) for _ in range(10)]
-train(50, "SA", struct_1_agents)
+# struct_1_agents = [copy.deepcopy(struct_1) for _ in range(10)]
+# train(50, "SA", struct_1_agents)
 
 
-struct_2_agents = [copy.deepcopy(struct_2) for _ in range(10)]
-train(50, "SA", struct_2_agents)
+# struct_2_agents = [copy.deepcopy(struct_2) for _ in range(10)]
+# train(50, "SA", struct_2_agents)
 
 
-struct_3_agents = [copy.deepcopy(struct_3) for _ in range(10)]
-train(50, "SA", struct_3_agents)
+# struct_3_agents = [copy.deepcopy(struct_3) for _ in range(10)]
+# train(50, "SA", struct_3_agents)
 
 
-struct_4_agents = [copy.deepcopy(struct_4) for _ in range(10)]
-train(50, "SA", struct_4_agents)
+# struct_4_agents = [copy.deepcopy(struct_4) for _ in range(10)]
+# train(50, "SA", struct_4_agents)
 
 
-struct_5_agents = [copy.deepcopy(struct_5) for _ in range(10)]
-train(50, "SA", struct_5_agents)
+# struct_5_agents = [copy.deepcopy(struct_5) for _ in range(10)]
+# train(50, "SA", struct_5_agents)
 
 
-struct_6_agents = [copy.deepcopy(struct_6) for _ in range(10)]
-train(50, "SA", struct_6_agents)
+# struct_6_agents = [copy.deepcopy(struct_6) for _ in range(10)]
+# train(50, "SA", struct_6_agents)
 
 
-struct_7_agents = [copy.deepcopy(struct_7) for _ in range(10)]
-train(50, "SA", struct_7_agents)
+# struct_7_agents = [copy.deepcopy(struct_7) for _ in range(10)]
+# train(50, "SA", struct_7_agents)
 
 
-struct_8_agents = [copy.deepcopy(struct_8) for _ in range(10)]
-train(50, "SA", struct_8_agents)
+# struct_8_agents = [copy.deepcopy(struct_8) for _ in range(10)]
+# train(50, "SA", struct_8_agents)
 
 
-struct_9_agents = [copy.deepcopy(struct_9) for _ in range(10)]
-train(50, "SA", struct_9_agents)
+# struct_9_agents = [copy.deepcopy(struct_9) for _ in range(10)]
+# train(50, "SA", struct_9_agents)
 
 
-struct_10_agents = [copy.deepcopy(struct_10) for _ in range(10)]
-train(50, "SA", struct_10_agents)
+# struct_10_agents = [copy.deepcopy(struct_10) for _ in range(10)]
+# train(50, "SA", struct_10_agents)
 
 
-struct_11_agents = [copy.deepcopy(struct_11) for _ in range(10)]
-train(50, "SA", struct_11_agents)
+# struct_11_agents = [copy.deepcopy(struct_11) for _ in range(10)]
+# train(50, "SA", struct_11_agents)
 
 
-struct_13_agents = [copy.deepcopy(struct_13) for _ in range(10)]
-train(50, "SA", struct_13_agents)
+# struct_13_agents = [copy.deepcopy(struct_13) for _ in range(10)]
+# train(50, "SA", struct_13_agents)
 
 
-print("x done")
-plot_monte_carlo(x_agents)
-print("y done")
-plot_monte_carlo(y_agents)
-print("struct_1 done")
-plot_monte_carlo(struct_1_agents)
-print("struct_2 done")
-plot_monte_carlo(struct_2_agents)
-print("struct_3 done")
-plot_monte_carlo(struct_3_agents)
-print("struct_4 done")
-plot_monte_carlo(struct_4_agents)
-print("struct_5 done")
-plot_monte_carlo(struct_5_agents)
-print("struct_6 done")
-plot_monte_carlo(struct_6_agents)
-print("struct_7 done")
-plot_monte_carlo(struct_7_agents)
-print("struct_8 done")
-plot_monte_carlo(struct_8_agents)
-print("struct_9 done")
-plot_monte_carlo(struct_9_agents)
-print("struct_10 done")
-plot_monte_carlo(struct_10_agents)
-print("struct_11 done")
-plot_monte_carlo(struct_11_agents)
-print("struct_13 done")
-plot_monte_carlo(struct_13_agents)
+# print("x done")
+# plot_monte_carlo(x_agents)
+# print("y done")
+# plot_monte_carlo(y_agents)
+# print("struct_1 done")
+# plot_monte_carlo(struct_1_agents)
+# print("struct_2 done")
+# plot_monte_carlo(struct_2_agents)
+# print("struct_3 done")
+# plot_monte_carlo(struct_3_agents)
+# print("struct_4 done")
+# plot_monte_carlo(struct_4_agents)
+# print("struct_5 done")
+# plot_monte_carlo(struct_5_agents)
+# print("struct_6 done")
+# plot_monte_carlo(struct_6_agents)
+# print("struct_7 done")
+# plot_monte_carlo(struct_7_agents)
+# print("struct_8 done")
+# plot_monte_carlo(struct_8_agents)
+# print("struct_9 done")
+# plot_monte_carlo(struct_9_agents)
+# print("struct_10 done")
+# plot_monte_carlo(struct_10_agents)
+# print("struct_11 done")
+# plot_monte_carlo(struct_11_agents)
+# print("struct_13 done")
+# plot_monte_carlo(struct_13_agents)
