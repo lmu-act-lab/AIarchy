@@ -57,7 +57,7 @@ class TimeStep:
 
     def get_column_average(self, column_name: str) -> float:
         """
-        Calculate and round the average of a specified column in the memory DataFrame.
+        Calculate the average of a specified column in the memory DataFrame.
 
         Parameters
         ----------
@@ -82,11 +82,9 @@ class TimeStep:
         return False
 
     def __hash__(self):
-        # Hash sample_vars, reward_vars as sorted tuples to maintain order consistency
         sample_vars_hash = hash(tuple(sorted(self.average_sample.keys())))
         reward_vars_hash = hash(tuple(sorted(self.average_reward.keys())))
         weights_hash = hash(tuple(sorted(self.weights.items())))
         tweak_var_hash = hash(self.tweak_var)
 
-        # Combine the hashes using XOR or a tuple for a unique combination
         return hash((sample_vars_hash, reward_vars_hash, weights_hash, tweak_var_hash))
