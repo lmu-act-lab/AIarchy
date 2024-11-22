@@ -51,7 +51,7 @@ class TrainingEnvironment():
             # Adjust bottom space: less space between parameters, enough for plot
             num_params = len(params)
             # Adjust to ensure enough space for the plot and params
-            bottom_margin = 0.15 + 0.04 * num_params
+            bottom_margin = 0.1 + 0.04 * num_params
 
             plt.subplots_adjust(bottom=bottom_margin)
 
@@ -66,7 +66,7 @@ class TrainingEnvironment():
                 # Reduced vertical space between parameters
                 plt.figtext(
                     0.5,
-                    bottom_margin - (0.04 * i) - 0.1,
+                    bottom_margin - (0.03 * i) - 0.1,
                     f"{param}: {param_val_str}",
                     ha="center",
                     va="top",
