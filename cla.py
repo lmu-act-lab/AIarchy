@@ -488,9 +488,7 @@ class CausalLearningAgent:
         cpd: TabularCPD = self.original_model.get_cpds(variable)
         return cpd.values[value]
 
-    def cdn_query(self, query_vars, do_evidence, inv_evidence, pcc, obs_only=False):
-        key = (frozenset(query_vars), frozenset(do_evidence.items()), frozenset(inv_evidence.items()), pcc, obs_only)
-
+    def cdn_query(self, query_vars, do_evidence):
         shared_vars = [var for var in query_vars if var in do_evidence.keys()]
         if len(shared_vars) > 0:
             model_copy = self.model.copy()
@@ -500,18 +498,12 @@ class CausalLearningAgent:
                     cpt.values[idx] = 0 if idx != do_evidence[var] else 1
             model_copy.do(nodes=shared_vars)
             inference = CausalInference(model_copy)
-            query = inference.query(variables=query_vars, evidence=inv_evidence, show_progress=False)
-
-            self.cached_cdn_queries[key] = query
+            query = inference.query(variables=query_vars, show_progress=False)
             return query
 
-
-        inference = self.inference
-        if not obs_only:
-            updated_model = self.sampling_model.do(nodes = list(do_evidence.keys()))
-            inference = CausalInference(updated_model)
-        combined_evidence = {**inv_evidence, **do_evidence}
-        query = inference.query(variables=query_vars, evidence=combined_evidence, show_progress=False)
+        updated_model = self.sampling_model.do(nodes = list(do_evidence.keys()))
+        inference = CausalInference(updated_model)
+        query = inference.query(variables=query_vars, evidence=do_evidence, show_progress=False)
         return query
 
     def time_step(
@@ -739,7 +731,7 @@ class CausalLearningAgent:
                                         key
                                         for key in parent_dict.keys()
                                         if key != tweak_var
-                                    ],{tweak_var: tweak_dir}, {}, []).get_value(
+                                    ],{tweak_var: tweak_dir}).get_value(
                                     **{
                                         key: value
                                         for key, value in parent_dict.items()

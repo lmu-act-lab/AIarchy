@@ -2,6 +2,7 @@ from cla import CausalLearningAgent
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from training_environment import TrainingEnvironment
 import copy
+from pgmpy import global_vars
 
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
@@ -382,88 +383,104 @@ struct_13: CausalLearningAgent = CausalLearningAgent(
     {},
 )
 
-# Monte carlo stuff
+#########################################
+##                                     ##
+##             TESTING AREA            ##
+##                                     ##
+#########################################
+
+import logging
+
+logging.disable(logging.CRITICAL)
+
+# config = global_vars.Config()
+# config.set_backend('torch')
+# config.set_device('cuda')
+
+import time
+
+start = time.time()
 x_agents = [copy.deepcopy(x) for _ in range(10)]
-testing_environment.train(100, "SA", x_agents)
+testing_environment.train(6, "SA", x_agents)
+print(time.time() - start)
+
+# y_agents = [copy.deepcopy(y) for _ in range(1)]
+# testing_environment.train(6, "SA", y_agents)
 
 
-y_agents = [copy.deepcopy(y) for _ in range(10)]
-testing_environment.train(100, "SA", y_agents)
+# struct_1_agents = [copy.deepcopy(struct_1) for _ in range(3)]
+# testing_environment.train(100, "SA", struct_1_agents)
 
 
-struct_1_agents = [copy.deepcopy(struct_1) for _ in range(10)]
-testing_environment.train(200, "SA", struct_1_agents)
+# struct_2_agents = [copy.deepcopy(struct_2) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_2_agents)
 
 
-struct_2_agents = [copy.deepcopy(struct_2) for _ in range(10)]
-testing_environment.train(50, "SA", struct_2_agents)
+# struct_3_agents = [copy.deepcopy(struct_3) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_3_agents)
 
 
-struct_3_agents = [copy.deepcopy(struct_3) for _ in range(10)]
-testing_environment.train(50, "SA", struct_3_agents)
+# struct_4_agents = [copy.deepcopy(struct_4) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_4_agents)
 
 
-struct_4_agents = [copy.deepcopy(struct_4) for _ in range(10)]
-testing_environment.train(50, "SA", struct_4_agents)
+# struct_5_agents = [copy.deepcopy(struct_5) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_5_agents)
 
 
-struct_5_agents = [copy.deepcopy(struct_5) for _ in range(10)]
-testing_environment.train(50, "SA", struct_5_agents)
+# struct_6_agents = [copy.deepcopy(struct_6) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_6_agents)
 
 
-struct_6_agents = [copy.deepcopy(struct_6) for _ in range(10)]
-testing_environment.train(50, "SA", struct_6_agents)
+# struct_7_agents = [copy.deepcopy(struct_7) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_7_agents)
 
 
-struct_7_agents = [copy.deepcopy(struct_7) for _ in range(10)]
-testing_environment.train(50, "SA", struct_7_agents)
+# struct_8_agents = [copy.deepcopy(struct_8) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_8_agents)
 
 
-struct_8_agents = [copy.deepcopy(struct_8) for _ in range(10)]
-testing_environment.train(50, "SA", struct_8_agents)
+# struct_9_agents = [copy.deepcopy(struct_9) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_9_agents)
 
 
-struct_9_agents = [copy.deepcopy(struct_9) for _ in range(10)]
-testing_environment.train(50, "SA", struct_9_agents)
+# struct_10_agents = [copy.deepcopy(struct_10) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_10_agents)
 
 
-struct_10_agents = [copy.deepcopy(struct_10) for _ in range(10)]
-testing_environment.train(50, "SA", struct_10_agents)
+# struct_11_agents = [copy.deepcopy(struct_11) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_11_agents)
 
 
-struct_11_agents = [copy.deepcopy(struct_11) for _ in range(10)]
-testing_environment.train(50, "SA", struct_11_agents)
+# struct_13_agents = [copy.deepcopy(struct_13) for _ in range(10)]
+# testing_environment.train(50, "SA", struct_13_agents)
 
 
-struct_13_agents = [copy.deepcopy(struct_13) for _ in range(10)]
-testing_environment.train(50, "SA", struct_13_agents)
-
-
-print("x done")
-testing_environment.plot_monte_carlo(x_agents)
-print("y done")
-testing_environment.plot_monte_carlo(y_agents)
-print("struct_1 done")
-testing_environment.plot_monte_carlo(struct_1_agents)
-print("struct_2 done")
-testing_environment.plot_monte_carlo(struct_2_agents)
-print("struct_3 done")
-testing_environment.plot_monte_carlo(struct_3_agents)
-print("struct_4 done")
-testing_environment.plot_monte_carlo(struct_4_agents)
-print("struct_5 done")
-testing_environment.plot_monte_carlo(struct_5_agents)
-print("struct_6 done")
-testing_environment.plot_monte_carlo(struct_6_agents)
-print("struct_7 done")
-testing_environment.plot_monte_carlo(struct_7_agents)
-print("struct_8 done")
-testing_environment.plot_monte_carlo(struct_8_agents)
-print("struct_9 done")
-testing_environment.plot_monte_carlo(struct_9_agents)
-print("struct_10 done")
-testing_environment.plot_monte_carlo(struct_10_agents)
-print("struct_11 done")
-testing_environment.plot_monte_carlo(struct_11_agents)
-print("struct_13 done")
-testing_environment.plot_monte_carlo(struct_13_agents)
+# print("x done")
+# testing_environment.plot_monte_carlo(x_agents, True)
+# print("y done")
+# testing_environment.plot_monte_carlo(y_agents, True)
+# print("struct_1 done")
+# testing_environment.plot_monte_carlo(struct_1_agents)
+# print("struct_2 done")
+# testing_environment.plot_monte_carlo(struct_2_agents)
+# print("struct_3 done")
+# testing_environment.plot_monte_carlo(struct_3_agents)
+# print("struct_4 done")
+# testing_environment.plot_monte_carlo(struct_4_agents)
+# print("struct_5 done")
+# testing_environment.plot_monte_carlo(struct_5_agents)
+# print("struct_6 done")
+# testing_environment.plot_monte_carlo(struct_6_agents)
+# print("struct_7 done")
+# testing_environment.plot_monte_carlo(struct_7_agents)
+# print("struct_8 done")
+# testing_environment.plot_monte_carlo(struct_8_agents)
+# print("struct_9 done")
+# testing_environment.plot_monte_carlo(struct_9_agents)
+# print("struct_10 done")
+# testing_environment.plot_monte_carlo(struct_10_agents)
+# print("struct_11 done")
+# testing_environment.plot_monte_carlo(struct_11_agents)
+# print("struct_13 done")
+# testing_environment.plot_monte_carlo(struct_13_agents)

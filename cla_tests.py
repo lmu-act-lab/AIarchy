@@ -88,10 +88,5 @@ class TestTraining(unittest.TestCase):
         def test_monte_carlo_average(self):
             pass
 
-
-    
-
-
-
 if __name__ == "__main__":
     unittest.main()
