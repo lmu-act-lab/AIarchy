@@ -32,6 +32,7 @@ class CausalLearningAgent:
         glue_vars: set[str],
         reward_func: Callable[[dict[str, int]], dict[str, float]],
         fixed_evidence: dict[str, int] = {},
+        hidden_vars: list[str] = [],
         weights: dict[str, float] = {},
         threshold: float = 0.05,
         temperature: float = 1,
@@ -89,6 +90,7 @@ class CausalLearningAgent:
         self.glue_vars: set[str] = glue_vars
         self.non_utility_vars: set[str] = reflective_vars | chance_vars | glue_vars
         self.fixed_assignment: dict[str, int] = fixed_evidence
+        self.hidden_vars: list[str] = hidden_vars
 
         self.structural_model: BayesianNetwork = BayesianNetwork(
             self.sampling_model.edges()
@@ -116,10 +118,10 @@ class CausalLearningAgent:
 
         for utility in self.utility_vars:
             self.u_hat_models[utility] = CLANN(
-                self.structural_model.get_parents(utility), [utility]
+                list(set(self.structural_model.get_parents(utility)) - set(self.hidden_vars)), [utility]
             )
         self.inference = CausalInference(self.sampling_model)
-
+        
         for cpt in cpts:
             self.sampling_model.add_cpds(cpt)
 
@@ -647,7 +649,6 @@ class CausalLearningAgent:
             Number of iterations to train the agent for.
         """
         while iterations > 0:
-            print(iterations)
             utility_to_adjust: set[str] = set()
             if len(self.memory) > 0:
                 for var, ema in self.ema.items():
