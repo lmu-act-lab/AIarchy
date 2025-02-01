@@ -1,2 +1,2 @@
 # AIarchy
-Testing model based learning through CBNs and RL
+Researching model-based learning through CBNs and RL in a multi-agent hierarchical environment
