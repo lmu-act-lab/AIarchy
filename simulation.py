@@ -3,6 +3,7 @@ from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from training_environment import TrainingEnvironment
 from pgmpy import global_vars
 import copy
+from approxq_agent import ApproxQComparisonAgent
 
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
@@ -513,3 +514,12 @@ testing_environment.post_training_visualization(trained_agents)
 # testing_environment.plot_monte_carlo(struct_13_agents, show_params=True)
 
 # x_agents[0].plot_memory_against(y_agents[0])
+
+new_agent = ApproxQComparisonAgent(actions = [("Time studying", 0), ("Time studying", 1), ("Time studying", 2), ("Exercise", 0), ("Exercise", 1), ("Sleep", 0), ("Sleep", 1), ("Sleep", 2), ("ECs", 0), ("ECs", 1)], gamma = 0.1, alpha = 0.01, cla_agent=x)
+
+iterations = 100
+rewards = []
+while iterations > 0:
+    
+    new_agent.choose_action()
+    iterations -= 1
