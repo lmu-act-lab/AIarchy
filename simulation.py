@@ -395,22 +395,22 @@ struct_13: CausalLearningAgent = CausalLearningAgent(
 import logging
 logging.disable(logging.WARNING)
 
-testing_environment.pre_training_visualization(x)
-testing_environment.pre_training_visualization(y)
+# testing_environment.pre_training_visualization(x)
+# testing_environment.pre_training_visualization(y)
 
 
-# Begin training (here using SA style and 5 monte carlo repetitions for demonstration)
-agents = [x, y, struct_1, struct_2, struct_3]
-trained_agents = testing_environment.train(5, "SA", agents)
+# # Begin training (here using SA style and 5 monte carlo repetitions for demonstration)
+# agents = [x, y, struct_1, struct_2, struct_3]
+# trained_agents = testing_environment.train(5, "SA", agents)
 
-# Post-Training Visualizations:
-# For demonstration, we assume that the agents have stored old_cpds and new_cpds (this code is illustrative)
-# Here we simply use the same CPTs from x for both old and new
-old_cpds = x.get_cpts() if hasattr(x, "get_cpts") else []
-new_cpds = x.get_cpts() if hasattr(x, "get_cpts") else []
-testing_environment.plot_cpt_comparison(x, old_cpds, new_cpds)
+# # Post-Training Visualizations:
+# # For demonstration, we assume that the agents have stored old_cpds and new_cpds (this code is illustrative)
+# # Here we simply use the same CPTs from x for both old and new
+# old_cpds = x.get_cpts() if hasattr(x, "get_cpts") else []
+# new_cpds = x.get_cpts() if hasattr(x, "get_cpts") else []
+# testing_environment.plot_cpt_comparison(x, old_cpds, new_cpds)
 
-testing_environment.post_training_visualization(trained_agents)
+# testing_environment.post_training_visualization(trained_agents)
 
 
 # x_agents = [copy.deepcopy(x) for _ in range(10)]
@@ -520,6 +520,11 @@ new_agent = ApproxQComparisonAgent(actions = [("Time studying", 0), ("Time study
 iterations = 100
 rewards = []
 while iterations > 0:
-    
-    new_agent.choose_action()
+    beginning_state = x.time_step({}, x.weights, x.sample_num)
+    action = new_agent.choose_action(beginning_state)
+    new_state = x.time_step({}, x.weights, x.sample_num, {action[0] : action[1]})
+    reward = new_state.average_reward
+    new_agent.q_value_update(sum(reward.values()), beginning_state, new_state, action)
+    print(new_agent.get_features(action))
+    print(new_agent.weights)
     iterations -= 1
