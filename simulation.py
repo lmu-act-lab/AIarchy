@@ -4,6 +4,8 @@ from training_environment import TrainingEnvironment
 from pgmpy import global_vars
 import copy
 from approxq_agent import ApproxQComparisonAgent
+from exactq_agent import ExactQComparisonAgent
+import matplotlib.pyplot as plt
 
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
@@ -430,7 +432,7 @@ logging.disable(logging.WARNING)
 
 # struct_2_agents = [copy.deepcopy(struct_2) for _ in range(15)]
 # print("training struct_2")
-# testing_environment.train(300, "SA", struct_2_agents)
+# testing_environment.train(500, "SA", struct_2_agents)
 # print("struct_2 training done")
 
 # struct_3_agents = [copy.deepcopy(struct_3) for _ in range(15)]
@@ -514,17 +516,50 @@ logging.disable(logging.WARNING)
 # testing_environment.plot_monte_carlo(struct_13_agents, show_params=True)
 
 # x_agents[0].plot_memory_against(y_agents[0])
+actions = [("Time studying", 0), ("Time studying", 1), ("Time studying", 2), ("Exercise", 0), ("Exercise", 1), ("Sleep", 0), ("Sleep", 1), ("Sleep", 2), ("ECs", 0), ("ECs", 1)]
+struct_2_actions = [("refl_1", 0), ("refl_1", 1)]
+# new_agent = ApproxQComparisonAgent(actions = actions, gamma = 0.1, alpha = 0.01, cla_agent=x)
 
-new_agent = ApproxQComparisonAgent(actions = [("Time studying", 0), ("Time studying", 1), ("Time studying", 2), ("Exercise", 0), ("Exercise", 1), ("Sleep", 0), ("Sleep", 1), ("Sleep", 2), ("ECs", 0), ("ECs", 1)], gamma = 0.1, alpha = 0.01, cla_agent=x)
+# iterations = 100
+# rewards = []
+# while iterations > 0:
+#     beginning_state = x.time_step({}, x.weights, x.sample_num)
+#     action = new_agent.choose_action(beginning_state)
+#     new_state = x.time_step({}, x.weights, x.sample_num, {action[0] : action[1]})
+#     reward = new_state.average_reward
+#     new_agent.q_value_update(sum(reward.values()), beginning_state, new_state, action)
+#     print(new_agent.get_features(action))
+#     print(new_agent.weights)
+#     iterations -= 1
 
-iterations = 100
-rewards = []
-while iterations > 0:
-    beginning_state = x.time_step({}, x.weights, x.sample_num)
-    action = new_agent.choose_action(beginning_state)
-    new_state = x.time_step({}, x.weights, x.sample_num, {action[0] : action[1]})
-    reward = new_state.average_reward
-    new_agent.q_value_update(sum(reward.values()), beginning_state, new_state, action)
-    print(new_agent.get_features(action))
-    print(new_agent.weights)
-    iterations -= 1
+actions = [(action, 0.01) for action in actions[::-1]]
+struct_2_actions = [(action, 0.05) for action in struct_2_actions[::-1]]
+
+agents = [copy.deepcopy(ExactQComparisonAgent(actions = struct_2_actions, gamma = 0.1, alpha = 0.01, cla_agent=copy.deepcopy(struct_2))) for i in range(15)]
+
+for exact in agents:
+    print(f"agent: {agents.index(exact)}")
+    exact.train(500)
+
+average_rewards: list[float] = []
+for iteration in range(len(agents[0].reward_tracker)):
+    total_reward = 0
+    for agent in agents:
+        total_reward += agent.reward_tracker[iteration]
+    average_rewards.append(total_reward / len(agents))
+
+for cpt in agents[0].agent.get_cpts():
+    print(cpt)
+
+print(agents[0].qvals)
+
+max_key = max(agents[0].qvals, key=agents[0].qvals.get)
+print("Key with max value:", max_key)
+print("Max value:", agents[0].qvals[max_key])
+
+
+plt.plot(average_rewards)
+plt.xlabel('Iterations')
+plt.ylabel('Reward')
+plt.title('Reward Tracker Over Iterations')
+plt.show()
