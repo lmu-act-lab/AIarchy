@@ -5,9 +5,9 @@ import copy
 import warnings
 
 from pgmpy.factors.discrete import TabularCPD
-from cla import CausalLearningAgent
-from cla_neural_network import CLANeuralNetwork as CLANN
-from util import Counter
+from src.cla import CausalLearningAgent
+from src.cla_neural_network import CLANeuralNetwork as CLANN
+from src.util import Counter
 
 warnings.filterwarnings("ignore")
 

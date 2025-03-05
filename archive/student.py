@@ -5,7 +5,7 @@ from pgmpy.inference.CausalInference import CausalInference
 from collections import Counter
 import networkx as nx
 import pandas as pd
-import util
+import src.util as util
 import random
 import copy
 import numpy as np

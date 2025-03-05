@@ -1,4 +1,4 @@
-from util import Counter
+from src.util import Counter
 import random
 
 
