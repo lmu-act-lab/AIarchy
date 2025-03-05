@@ -6,6 +6,7 @@ matplotlib.use("TkAgg")  # Use 'TkAgg' backend for interactive plots
 from cla import CausalLearningAgent
 from util import Counter
 import time
+import pandas as pd
 
 
 class TrainingEnvironment:
@@ -118,27 +119,143 @@ class TrainingEnvironment:
 
     def post_training_visualization(self, agents: list["CausalLearningAgent"]) -> None:
         """
-        Post-training visualization. Plots parameter evolution if agents store a parameter_history dict.
-        Also plots expected rewards across agents.
+        Post-training visualization. Plots parameter evolution (from ema_history) and 
+        average utility weights (from each TimeStep's weights) on the same graph using two y-axes.
+        
+        The left y-axis corresponds to the parameter evolution, while the right y-axis
+        corresponds to the average utility weights. This allows you to compare how both
+        evolve over training iterations.
         """
-        # Plot parameter evolution for first agent if available
-        if hasattr(agents[0], "parameter_history"):
-            history = agents[
-                0
-            ].parameter_history  # expected to be a dict[str, list[float]]
-            plt.figure(figsize=(8, 6))
-            for param, values in history.items():
-                plt.plot(values, label=param)
-            plt.xlabel("Training Iteration")
-            plt.ylabel("Parameter Value")
-            plt.title("Parameter Evolution Over Training")
-            plt.legend()
-            plt.show()
+        fig, ax1 = plt.subplots()
+
+        # Plot parameter evolution if ema_history exists.
+        if hasattr(agents[0], "ema_history") and agents[0].ema_history:
+            history = agents[0].ema_history  # List[dict[str, float]]
+            x_params = list(range(len(history)))
+            for key in history[0].keys():
+                y_params = [d[key] for d in history]
+                ax1.plot(x_params, y_params, label=f"EMA: {key}")
+            ax1.set_xlabel("Iteration")
+            ax1.set_ylabel("EMA Value")
         else:
             print("No parameter history available for plotting.")
+        
+        # Plot average weights for each utility using a second y-axis.
+        if hasattr(agents[0], "memory") and agents[0].memory:
+            utilities = list(agents[0].utility_vars)
+            num_iterations = len(agents[0].memory)
+            weights_over_time = {util: [] for util in utilities}
+            # Compute the average weight per utility for each timestep.
+            for t in range(num_iterations):
+                for util in utilities:
+                    total_weight = 0.0
+                    for agent in agents:
+                        timestep = agent.memory[t]
+                        total_weight += timestep.weights[util]
+                    avg_weight = total_weight / len(agents)
+                    weights_over_time[util].append(avg_weight)
+            x_weights = list(range(num_iterations))
+            
+            # Create a second y-axis sharing the same x-axis.
+            ax2 = ax1.twinx()
+            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            for i, util in enumerate(utilities):
+                color = colors[i % len(colors)]
+                ax2.plot(x_weights, weights_over_time[util], '-o', color=color, label=f"{util} weight")
+            ax2.set_ylabel("Average Utility Weight")
+        else:
+            print("No memory available for plotting weights.")
 
-        # Compare expected rewards across agents
-        self.plot_expected_reward(agents, mc_reps=10)
+        # Combine legends from both axes.
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        if hasattr(agents[0], "memory") and agents[0].memory:
+            lines2, labels2 = ax2.get_legend_handles_labels()
+        else:
+            lines2, labels2 = [], []
+        
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
+        ax1.set_title("Parameter Evolution Over Iterations")
+        plt.show()
+
+    def show_cpt_changes(self, agents: list["CausalLearningAgent"]) -> None:
+        """
+        Visualize CPD changes by plotting a heatmap for each CPD of the first agent.
+        Only CPDs for variables in agent.reflective_vars are plotted.
+        The background color intensity is determined by the delta (change from the original CPD),
+        while the original CPD values are annotated on the heatmap.
+        The evidence configurations are shown in detail (e.g. "diff=0, intel=1").
+
+        The color scale is fixed (vmin=-1 and vmax=1) so that changes are comparable across CPDs.
+        """
+        # Use only the first agent in the list.
+        agent = agents[0]
+        cpds = agent.get_cpts()
+        
+        import seaborn as sns
+        from itertools import product
+        import pandas as pd
+        import numpy as np
+
+        def cpd_to_df(cpd):
+            """
+            Converts a TabularCPD (or equivalent DiscreteFactor) to a DataFrame with descriptive row labels.
+            Assumes the ordering of variables in the CPD is:
+                [target, evidence1, evidence2, ...]
+            Rows will correspond to each evidence configuration and columns to target states.
+            """
+            target = cpd.variables[0]
+            target_card = cpd.cardinality[0]
+            # If there are evidence variables, they appear as the remaining elements in cpd.variables.
+            if len(cpd.variables) > 1:
+                evidence = cpd.variables[1:]
+                # Obtain evidence cardinalities by slicing the overall cardinality array.
+                evidence_card = list(cpd.cardinality[1:])
+                product_evidence = np.prod(evidence_card)
+                # Create descriptive labels for each evidence configuration.
+                levels = [list(range(card)) for card in evidence_card]
+                index_labels = [
+                    ", ".join(f"{var}={val}" for var, val in zip(evidence, tup))
+                    for tup in product(*levels)
+                ]
+                # Reshape values to (target_card, product_evidence) then transpose so that rows are evidence configs.
+                reshaped = cpd.values.reshape((target_card, product_evidence)).T
+                df = pd.DataFrame(reshaped,
+                                index=index_labels,
+                                columns=[f"{target}={i}" for i in range(target_card)])
+            else:
+                # No evidence; create a single-row DataFrame.
+                df = pd.DataFrame(cpd.values.reshape((target_card, 1)).T,
+                                columns=[f"{target}={i}" for i in range(target_card)],
+                                index=["No evidence"])
+            return df
+
+        # Loop over each CPD in the agent and only process those whose target is in reflective_vars.
+        for cpd in cpds:
+            if cpd.variable not in agent.reflective_vars:
+                continue
+
+            # Compute the delta CPD (difference from the original CPD)
+            delta_cpd = agent.compute_cpd_delta(cpd.variable)
+            
+            # Convert both the original CPD and the delta CPD to DataFrames.
+            df_original = cpd_to_df(cpd)
+            df_delta = cpd_to_df(delta_cpd)
+            
+            # Create a heatmap with an objective color scale.
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(
+                df_delta,
+                annot=df_original,  # Annotate each cell with the original CPD value.
+                fmt=".2f",
+                cmap="RdYlGn",
+                center=0,      # Zero delta is neutral.
+                vmin=-1,       # Fixed minimum for the color scale.
+                vmax=1         # Fixed maximum for the color scale.
+            )
+            plt.title(f"CPD Changes for {cpd.variable}")
+            plt.xlabel("Target State")
+            plt.ylabel("Evidence Configuration")
+            plt.show()
 
     def plot_cpt_comparison(
         self, agent: "CausalLearningAgent", old_cpds: list, new_cpds: list
@@ -252,13 +369,99 @@ class TrainingEnvironment:
         plt.title(f"Average Reward Across {len(agents)} Agents")
         plt.show()
 
-    def reward(
+    def plot_weighted_rewards(self, agents: list[CausalLearningAgent], show_params: bool = False) -> None:
+        """
+        Plots the weighted rewards for each utility for the first agent only.
+
+        For each utility defined in the agent's `utility_vars`, the method computes:
+            - The subjective reward as:
+                subjective_reward = average_reward (from timestep) * subjective weight (from timestep)
+            - The objective reward as:
+                objective_reward = average_reward (from timestep) * objective weight (agent's fixed weight)
+        Two lines are plotted for each utility:
+            - A solid line (with markers) for subjective rewards.
+            - A dashed line for objective rewards.
+        Both lines for the same utility share the same color.
+
+        Parameters
+        ----------
+        agents : list[CausalLearningAgent]
+            List of agents (only the first agent is used for plotting).
+        show_params : bool, optional
+            If True, displays the parameters (from the first agent) below the plot.
+        """
+        # Use only the first agent.
+        agent = agents[0]
+        utilities = list(agent.utility_vars)
+        num_iterations = len(agent.memory)
+        
+        # Dictionaries to hold the weighted rewards per iteration.
+        subjective_weighted = {util: [] for util in utilities}
+        objective_weighted = {util: [] for util in utilities}
+        
+        # Loop through each timestep in the agent's memory.
+        for t in range(num_iterations):
+            timestep = agent.memory[t]
+            for util in utilities:
+                # Compute the weighted subjective reward using the timestep's weight.
+                subjective_reward = timestep.average_reward[util] * timestep.weights[util]
+                # Compute the weighted objective reward using the agent's fixed objective weight.
+                objective_reward = timestep.average_reward[util] * agent.objective_weights[util]
+                subjective_weighted[util].append(subjective_reward)
+                objective_weighted[util].append(objective_reward)
+        
+        # Optionally display parameters from the first agent.
+        if show_params:
+            params = agent.parameters
+            num_params = len(params)
+            bottom_margin = 0.1 + 0.04 * num_params
+            plt.subplots_adjust(bottom=bottom_margin)
+            for i, (param, param_val) in enumerate(params.items()):
+                if isinstance(param_val, dict):
+                    param_val_str = ", ".join([f"{k}: {v}" for k, v in param_val.items()])
+                else:
+                    param_val_str = str(param_val)
+                plt.figtext(
+                    0.5,
+                    bottom_margin - (0.03 * i) - 0.1,
+                    f"{param}: {param_val_str}",
+                    ha="center",
+                    va="top",
+                    wrap=True,
+                    fontsize=10,
+                    transform=plt.gcf().transFigure,
+                )
+        
+        iterations = list(range(num_iterations))
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        
+        # Plot the lines for each utility.
+        for i, util in enumerate(utilities):
+            color = colors[i % len(colors)]
+            plt.plot(iterations, subjective_weighted[util], '-o', color=color, label=f"{util} subjective")
+            plt.plot(iterations, objective_weighted[util], '--', color=color, label=f"{util} objective")
+        
+        plt.xlabel("Iteration")
+        plt.ylabel("Weighted Reward")
+        plt.title("Subjective & Objective Weighted Rewards for First Agent")
+        plt.legend()
+        plt.show()
+
+    def original_student_reward(
         self, sample: dict[str, int], utility_edges: list[tuple[str, str]]
     ) -> dict[str, float]:
         rewards: dict[str, float] = Counter()
         rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
         rewards["social"] += sample["ECs"]
         rewards["health"] += sample["Sleep"] + sample["Exercise"]
+        return rewards
+
+    def test_downweigh_reward(
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]]
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = Counter()
+        rewards["util_1"] += 0 if sample["refl_1"] == 1 else 1
+        rewards["util_2"] += sample["refl_1"]
         return rewards
 
     def default_reward(
