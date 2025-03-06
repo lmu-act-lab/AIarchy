@@ -114,18 +114,22 @@ class CausalLearningAgent:
         else:
             self.weights = weights
         self.objective_weights = Counter(
-                {key: 1 / len(self.utility_vars) for key in self.utility_vars}
-            )
+            {key: 1 / len(self.utility_vars) for key in self.utility_vars}
+        )
         self.reward_func = reward_func
         self.cum_memory: pd.DataFrame
         self.u_hat_models: dict[str, CLANN] = {}
 
         for utility in self.utility_vars:
             self.u_hat_models[utility] = CLANN(
-                list(set(self.structural_model.get_parents(utility)) - set(self.hidden_vars)), [utility]
+                list(
+                    set(self.structural_model.get_parents(utility))
+                    - set(self.hidden_vars)
+                ),
+                [utility],
             )
         self.inference = CausalInference(self.sampling_model)
-        
+
         for cpt in cpts:
             self.sampling_model.add_cpds(cpt)
 
@@ -135,10 +139,15 @@ class CausalLearningAgent:
         }
         self.downweigh_threshold = {}
         for utility in self.utility_vars:
-            max_reward = sum([(self.sampling_model.get_cardinality(parent) - 1) for parent in self.structural_model.get_parents(utility)])
-            self.downweigh_threshold[utility] = (max_reward / len(self.utility_vars)) / 2
-                
-            
+            max_reward = sum(
+                [
+                    (self.sampling_model.get_cardinality(parent) - 1)
+                    for parent in self.structural_model.get_parents(utility)
+                ]
+            )
+            self.downweigh_threshold[utility] = (
+                max_reward / len(self.utility_vars)
+            ) / 2
 
         self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
 
@@ -152,7 +161,7 @@ class CausalLearningAgent:
         }
         self.ema_history: list[dict[str, float]] = []
         self.parent_combinations = self.par_dict()
-        
+
     def par_dict(self):
         utility_to_parent_combos = {}
         for utility in self.utility_vars:
@@ -161,9 +170,7 @@ class CausalLearningAgent:
                 product(
                     *[
                         range(self.card_dict[parent])
-                        for parent in self.structural_model.get_parents(
-                            utility
-                        )
+                        for parent in self.structural_model.get_parents(utility)
                     ]
                 )
             )
@@ -182,7 +189,7 @@ class CausalLearningAgent:
                 all_combos.append(parent_dict)
             utility_to_parent_combos[utility] = all_combos
         return utility_to_parent_combos
-        
+
     def get_cpts(self) -> list[TabularCPD]:
         """
         Returns the CPDs of the sampling model.
@@ -484,7 +491,7 @@ class CausalLearningAgent:
                 },
                 show_progress=False,
             )
-        
+
         for category, reward in rewards.items():
             assignment = {var: sample[var] for var in rewards_queries[category]}
             expected_rewards[category] += reward * reward_probs[category].get_value(
@@ -544,9 +551,11 @@ class CausalLearningAgent:
             query = inference.query(variables=query_vars, show_progress=False)
             return query
 
-        updated_model = self.sampling_model.do(nodes = list(do_evidence.keys()))
+        updated_model = self.sampling_model.do(nodes=list(do_evidence.keys()))
         inference = CausalInference(updated_model)
-        query = inference.query(variables=query_vars, evidence=do_evidence, show_progress=False)
+        query = inference.query(
+            variables=query_vars, evidence=do_evidence, show_progress=False
+        )
         return query
 
     def time_step(
@@ -768,22 +777,19 @@ class CausalLearningAgent:
                         #             strict=True,
                         #         )
                         #     }
-                            # print(f"parent_dict: {parent_dict}")
-                            # # Tweak var takes precedence over combination of parent values
-                            # if tweak_var in parent_dict.keys():
-                            #     parent_dict[tweak_var] = tweak_dir
-                            # print(f"parent_dict after: {parent_dict}")
+                        # print(f"parent_dict: {parent_dict}")
+                        # # Tweak var takes precedence over combination of parent values
+                        # if tweak_var in parent_dict.keys():
+                        #     parent_dict[tweak_var] = tweak_dir
+                        # print(f"parent_dict after: {parent_dict}")
                         for parent_dict in self.parent_combinations[utility]:
                             reward[utility] += (
                                 # Get probability of parent values given tweak direction
-                                self.cdn_query([
-                                        key
-                                        for key in parent_dict.keys()
-                                    ],{tweak_var: tweak_dir}).get_value(
-                                    **{
-                                        key: value
-                                        for key, value in parent_dict.items()
-                                    }
+                                self.cdn_query(
+                                    [key for key in parent_dict.keys()],
+                                    {tweak_var: tweak_dir},
+                                ).get_value(
+                                    **{key: value for key, value in parent_dict.items()}
                                 )
                                 # Multiply by u hat (predicted utility) given current combo of parent values
                                 * self.u_hat_models[utility].predict(

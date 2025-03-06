@@ -81,7 +81,6 @@ list_of_cpts = [
 ]
 
 
-
 struct_1: CausalLearningAgent = CausalLearningAgent(
     sampling_edges=[("refl_2", "refl_1")],
     utility_edges=[("refl_2", "util_2"), ("refl_1", "util_1")],
@@ -437,7 +436,7 @@ academic_student = CausalLearningAgent(
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
     fixed_evidence={"SES": 2},
-    weights={"grades": 0.5, "health" : 0.25, "social" : 0.25},
+    weights={"grades": 0.5, "health": 0.25, "social": 0.25},
 )
 
 healthy_student = CausalLearningAgent(
@@ -464,7 +463,7 @@ healthy_student = CausalLearningAgent(
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
     fixed_evidence={"SES": 2},
-    weights={"grades": 0.25, "health" : 0.5, "social" : 0.25},
+    weights={"grades": 0.25, "health": 0.5, "social": 0.25},
 )
 
 social_student = CausalLearningAgent(
@@ -491,7 +490,7 @@ social_student = CausalLearningAgent(
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
     fixed_evidence={"SES": 2},
-    weights={"grades": 0.25, "health" : 0.25, "social" : 0.5},
+    weights={"grades": 0.25, "health": 0.25, "social": 0.5},
 )
 
 #########################################
@@ -502,6 +501,7 @@ social_student = CausalLearningAgent(
 
 
 import logging
+
 logging.disable(logging.WARNING)
 
 # --- EXACT Q SECTION --- #
@@ -571,16 +571,16 @@ logging.disable(logging.WARNING)
 # 5000 iterations for student models
 
 # Paraameters of interest
-test_temperatures: list[float] = [0.2 * i for i in range(1, 11)]
-
-test_coolings: list[float] = [0.99 ** i for i in range(1, 11)]
-
-test_cpt_increase_factors: list[float] = [0.02 * i for i in range(1, 11)]
-
-test_dw_alphas: list[float] = [0.02 * i for i in range(1, 11)]
-
-test_dw_factors: list[float] = [0.015 * i for i in range(1, 11)]
-
+test_temperatures: list[float] = [0.2 * i for i in range(1, 11, 3)]
+print(test_temperatures)
+test_coolings: list[float] = [0.99**i for i in range(1, 11, 3)]
+print(test_coolings)
+test_cpt_increase_factors: list[float] = [0.02 * i for i in range(1, 11, 3)]
+print(test_cpt_increase_factors)
+test_dw_alphas: list[float] = [0.02 * i for i in range(1, 11, 3)]
+print(test_dw_alphas)
+test_dw_factors: list[float] = [0.015 * i for i in range(1, 11, 3)]
+print(test_dw_factors)
 
 # struct 1
 # testing_environment.pre_training_visualization(struct_1)
@@ -697,7 +697,7 @@ for temp in test_temperatures:
         glue_vars=set(),
         reward_func=testing_environment.default_reward,
         fixed_evidence={"SES": 1},
-        temperature=temp
+        temperature=temp,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_temperature) for agent in range(250)]
     testing_environment.train(5000, "SA", Mid_SES_agents)
@@ -729,7 +729,7 @@ for cooling in test_coolings:
         glue_vars=set(),
         reward_func=testing_environment.default_reward,
         fixed_evidence={"SES": 1},
-        cooling_factor=cooling
+        cooling_factor=cooling,
     )
 
     Mid_SES_agents = [copy.deepcopy(Mid_SES_cooling) for agent in range(250)]
@@ -762,7 +762,7 @@ for factor in test_cpt_increase_factors:
         glue_vars=set(),
         reward_func=testing_environment.default_reward,
         fixed_evidence={"SES": 1},
-        cpt_increase_factor=factor
+        cpt_increase_factor=factor,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_cpt_increase) for agent in range(250)]
     testing_environment.train(5000, "SA", Mid_SES_agents)
@@ -794,7 +794,7 @@ for dw_alpha in test_dw_alphas:
         glue_vars=set(),
         reward_func=testing_environment.default_reward,
         fixed_evidence={"SES": 1},
-        downweigh_alpha=dw_alpha
+        downweigh_alpha=dw_alpha,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_dw_alpha) for agent in range(250)]
     testing_environment.train(5000, "SA", Mid_SES_agents)
@@ -826,7 +826,7 @@ for dw_factor in test_dw_factors:
         glue_vars=set(),
         reward_func=testing_environment.default_reward,
         fixed_evidence={"SES": 1},
-        downweigh_factor=dw_factor
+        downweigh_factor=dw_factor,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_dw_factor) for agent in range(250)]
     testing_environment.train(5000, "SA", Mid_SES_agents)
