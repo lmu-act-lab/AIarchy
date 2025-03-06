@@ -577,13 +577,13 @@ logging.disable(logging.WARNING)
 # Paraameters of interest
 test_temperatures: list[float] = [0.2 * i for i in range(1, 11, 3)]
 print(test_temperatures)
-test_coolings: list[float] = [0.99**i for i in range(1, 11, 3)]
+test_coolings: list[float] = [0.99 - (i * 0.1) for i in range(0, 8, 2)]
 print(test_coolings)
-test_cpt_increase_factors: list[float] = [0.02 * i for i in range(1, 11, 3)]
+test_cpt_increase_factors: list[float] = [0.01 * i for i in range(1, 9, 2)]
 print(test_cpt_increase_factors)
-test_dw_alphas: list[float] = [0.02 * i for i in range(1, 11, 3)]
+test_dw_alphas: list[float] = [0.01 * i for i in range(1, 11, 3)]
 print(test_dw_alphas)
-test_dw_factors: list[float] = [0.015 * i for i in range(1, 11, 3)]
+test_dw_factors: list[float] = [0.975 - (i * 0.01) for i in range(1, 11, 3)]
 print(test_dw_factors)
 
 # struct 1
