@@ -565,10 +565,14 @@ logging.disable(logging.WARNING)
 # testing_environment.plot_monte_carlo(monte_carlo_downweigh, show_params=True)
 # testing_environment.plot_weighted_rewards(monte_carlo_downweigh, show_params=True)
 
-### SPRING BREAK BIG TESTING RUN ###
-# 250 Monte Carlo Agents
-# 1000 iterations for smaller models
-# 5000 iterations for student models
+#|!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!|
+#|###################################|
+#|## SPRING BREAK BIG TESTING RUN ###|
+#|###################################|
+#|!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!|
+# 250/500 Monte Carlo Agents
+# 500 iterations for smaller models
+# 2500 iterations for student models
 
 # Paraameters of interest
 test_temperatures: list[float] = [0.2 * i for i in range(1, 11, 3)]
@@ -585,91 +589,93 @@ print(test_dw_factors)
 # struct 1
 # testing_environment.pre_training_visualization(struct_1)
 struct_1_agents = [copy.deepcopy(struct_1) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_1_agents)
+testing_environment.train(500, "SA", struct_1_agents)
 
 
 # struct 2
 # testing_environment.pre_training_visualization(struct_2)
 struct_2_agents = [copy.deepcopy(struct_2) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_2_agents)
+testing_environment.train(500, "SA", struct_2_agents)
 
 
 # struct 3
 # testing_environment.pre_training_visualization(struct_3)
 struct_3_agents = [copy.deepcopy(struct_3) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_3_agents)
+testing_environment.train(500, "SA", struct_3_agents)
 
 
 # struct 4
 # testing_environment.pre_training_visualization(struct_4)
 struct_4_agents = [copy.deepcopy(struct_4) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_4_agents)
+testing_environment.train(500, "SA", struct_4_agents)
 
 
 # struct 5
 # testing_environment.pre_training_visualization(struct_5)
 struct_5_agents = [copy.deepcopy(struct_5) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_5_agents)
+testing_environment.train(500, "SA", struct_5_agents)
 
 
 # struct 6
 # testing_environment.pre_training_visualization(struct_6)
 struct_6_agents = [copy.deepcopy(struct_6) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_6_agents)
+testing_environment.train(500, "SA", struct_6_agents)
 
 
 # struct 7
 # testing_environment.pre_training_visualization(struct_7)
 struct_7_agents = [copy.deepcopy(struct_7) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_7_agents)
+testing_environment.train(500, "SA", struct_7_agents)
 
 
 # struct 8
 # testing_environment.pre_training_visualization(struct_8)
 struct_8_agents = [copy.deepcopy(struct_8) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_8_agents)
+testing_environment.train(500, "SA", struct_8_agents)
 
 
 # struct 9
 # testing_environment.pre_training_visualization(struct_9)
 struct_9_agents = [copy.deepcopy(struct_9) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_9_agents)
+testing_environment.train(500, "SA", struct_9_agents)
 
 
 # struct 10
 # testing_environment.pre_training_visualization(struct_10)
 struct_10_agents = [copy.deepcopy(struct_10) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_10_agents)
+testing_environment.train(500, "SA", struct_10_agents)
 
 
 # struct 11
 # testing_environment.pre_training_visualization(struct_11)
 struct_11_agents = [copy.deepcopy(struct_11) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_11_agents)
+testing_environment.train(500, "SA", struct_11_agents)
 
 
 # struct 13
 # testing_environment.pre_training_visualization(struct_13)
 struct_13_agents = [copy.deepcopy(struct_13) for agent in range(500)]
-testing_environment.train(1000, "SA", struct_13_agents)
+testing_environment.train(500, "SA", struct_13_agents)
 
+
+# Students
 Low_SES_agents = [copy.deepcopy(Low_SES) for agent in range(250)]
-testing_environment.train(5000, "SA", Low_SES_agents)
+testing_environment.train(2500, "SA", Low_SES_agents)
 
 Mid_SES_agents = [copy.deepcopy(Mid_SES) for agent in range(250)]
-testing_environment.train(5000, "SA", Mid_SES_agents)
+testing_environment.train(2500, "SA", Mid_SES_agents)
 
 High_SES_agents = [copy.deepcopy(High_SES) for agent in range(250)]
-testing_environment.train(5000, "SA", High_SES_agents)
+testing_environment.train(2500, "SA", High_SES_agents)
 
 academic_student_agents = [copy.deepcopy(academic_student) for agent in range(250)]
-testing_environment.train(5000, "SA", academic_student_agents)
+testing_environment.train(2500, "SA", academic_student_agents)
 
 healthy_student_agents = [copy.deepcopy(healthy_student) for agent in range(250)]
-testing_environment.train(5000, "SA", healthy_student_agents)
+testing_environment.train(2500, "SA", healthy_student_agents)
 
 social_student_agents = [copy.deepcopy(social_student) for agent in range(250)]
-testing_environment.train(5000, "SA", social_student_agents)
+testing_environment.train(2500, "SA", social_student_agents)
 
 temperature_agents = []
 for temp in test_temperatures:
@@ -700,7 +706,7 @@ for temp in test_temperatures:
         temperature=temp,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_temperature) for agent in range(250)]
-    testing_environment.train(5000, "SA", Mid_SES_agents)
+    testing_environment.train(2500, "SA", Mid_SES_agents)
     temperature_agents.append(Mid_SES_agents)
 
 cooling_agents = []
@@ -733,7 +739,7 @@ for cooling in test_coolings:
     )
 
     Mid_SES_agents = [copy.deepcopy(Mid_SES_cooling) for agent in range(250)]
-    testing_environment.train(5000, "SA", Mid_SES_agents)
+    testing_environment.train(2500, "SA", Mid_SES_agents)
     cooling_agents.append(Mid_SES_agents)
 
 cpt_increase_agents = []
@@ -765,7 +771,7 @@ for factor in test_cpt_increase_factors:
         cpt_increase_factor=factor,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_cpt_increase) for agent in range(250)]
-    testing_environment.train(5000, "SA", Mid_SES_agents)
+    testing_environment.train(2500, "SA", Mid_SES_agents)
     cpt_increase_agents.append(Mid_SES_agents)
 
 dw_alphas_agents = []
@@ -797,7 +803,7 @@ for dw_alpha in test_dw_alphas:
         downweigh_alpha=dw_alpha,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_dw_alpha) for agent in range(250)]
-    testing_environment.train(5000, "SA", Mid_SES_agents)
+    testing_environment.train(2500, "SA", Mid_SES_agents)
     dw_alphas_agents.append(Mid_SES_agents)
 
 dw_factors_agents = []
@@ -829,7 +835,7 @@ for dw_factor in test_dw_factors:
         downweigh_factor=dw_factor,
     )
     Mid_SES_agents = [copy.deepcopy(Mid_SES_dw_factor) for agent in range(250)]
-    testing_environment.train(5000, "SA", Mid_SES_agents)
+    testing_environment.train(2500, "SA", Mid_SES_agents)
     dw_factors_agents.append(Mid_SES_agents)
 
 
