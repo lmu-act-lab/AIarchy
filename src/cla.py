@@ -138,17 +138,18 @@ class CausalLearningAgent:
             for key in (self.reflective_vars | self.chance_vars)
         }
         self.downweigh_threshold = {}
+        # for utility in self.utility_vars:
+        #     max_reward = sum(
+        #         [
+        #             (self.sampling_model.get_cardinality(parent) - 1)
+        #             for parent in self.structural_model.get_parents(utility)
+        #         ]
+        #     )
+        #     self.downweigh_threshold[utility] = (
+        #         max_reward / len(self.utility_vars)
+        #     ) / 2
         for utility in self.utility_vars:
-            max_reward = sum(
-                [
-                    (self.sampling_model.get_cardinality(parent) - 1)
-                    for parent in self.structural_model.get_parents(utility)
-                ]
-            )
-            self.downweigh_threshold[utility] = (
-                max_reward / len(self.utility_vars)
-            ) / 2
-
+            self.downweigh_threshold[utility] = 0.25
         self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
 
         self.parameters: dict[str, UnionType[float, int]] = {

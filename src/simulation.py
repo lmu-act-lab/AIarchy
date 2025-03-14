@@ -349,7 +349,7 @@ downweigh_struct: CausalLearningAgent = CausalLearningAgent(
 )
 
 confounding_struct_not_hidden: CausalLearningAgent = CausalLearningAgent(
-    sampling_edges=[],
+    sampling_edges=[("chance_1", "refl_1")],
     utility_edges=[("refl_1", "util_1"), ("refl_1", "util_2"), ("chance_1", "util_2")],
     cpts=[
         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
@@ -364,7 +364,7 @@ confounding_struct_not_hidden: CausalLearningAgent = CausalLearningAgent(
 )
 
 confounding_struct_hidden: CausalLearningAgent = CausalLearningAgent(
-    sampling_edges=[],
+    sampling_edges=[("chance_1", "refl_1")],
     utility_edges=[("refl_1", "util_1"), ("refl_1", "util_2"), ("chance_1", "util_2")],
     cpts=[
         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
@@ -591,17 +591,17 @@ logging.disable(logging.WARNING)
 # -------- DOWNWEIGH TESTING ---------
 
 # testing_environment.pre_training_visualization(downweigh_struct)
-downweigh_agents = [copy.deepcopy(downweigh_struct) for agent in range(75)]
-testing_environment.train(1000, "SA", downweigh_agents)
+# downweigh_agents = [copy.deepcopy(downweigh_struct) for agent in range(75)]
+# testing_environment.train(1000, "SA", downweigh_agents)
 
-# Downweigh Agents
-testing_environment.post_training_visualization(downweigh_agents)
-testing_environment.show_cpt_changes(downweigh_agents)
-testing_environment.plot_monte_carlo(downweigh_agents, show_params=True)
-testing_environment.plot_weighted_rewards(downweigh_agents, show_params=True)
+# # Downweigh Agents
+# testing_environment.post_training_visualization(downweigh_agents)
+# testing_environment.show_cpt_changes(downweigh_agents)
+# testing_environment.plot_monte_carlo(downweigh_agents, show_params=True)
+# testing_environment.plot_weighted_rewards(downweigh_agents, show_params=True)
 
 
-confounding_hidden_agents = [copy.deepcopy(confounding_struct_hidden) for agent in range(75)]
+confounding_hidden_agents = [copy.deepcopy(confounding_struct_hidden) for agent in range(125)]
 testing_environment.train(1000, "SA", confounding_hidden_agents)
 
 # Confounding Hidden Agents
@@ -611,7 +611,7 @@ testing_environment.plot_monte_carlo(confounding_hidden_agents, show_params=True
 testing_environment.plot_weighted_rewards(confounding_hidden_agents, show_params=True)
 
 
-confounding_not_hidden_agents = [copy.deepcopy(confounding_struct_not_hidden) for agent in range(75)]
+confounding_not_hidden_agents = [copy.deepcopy(confounding_struct_not_hidden) for agent in range(125)]
 testing_environment.train(1000, "SA", confounding_not_hidden_agents)
 
 # Confounding Not Hidden Agents
@@ -621,17 +621,17 @@ testing_environment.plot_monte_carlo(confounding_not_hidden_agents, show_params=
 testing_environment.plot_weighted_rewards(confounding_not_hidden_agents, show_params=True)
 
 
-struct_1_agents = [copy.deepcopy(struct_1) for agent in range(75)]
-testing_environment.train(1000, "SA", struct_1_agents)
+# struct_1_agents = [copy.deepcopy(struct_1) for agent in range(75)]
+# testing_environment.train(1000, "SA", struct_1_agents)
 
-# Struct 1 Agents
-testing_environment.post_training_visualization(struct_1_agents)
-testing_environment.show_cpt_changes(struct_1_agents)
-testing_environment.plot_monte_carlo(struct_1_agents, show_params=True)
-testing_environment.plot_weighted_rewards(struct_1_agents, show_params=True)
+# # Struct 1 Agents
+# testing_environment.post_training_visualization(struct_1_agents)
+# testing_environment.show_cpt_changes(struct_1_agents)
+# testing_environment.plot_monte_carlo(struct_1_agents, show_params=True)
+# testing_environment.plot_weighted_rewards(struct_1_agents, show_params=True)
 
 
-Mid_SES_agents = [copy.deepcopy(Mid_SES) for agent in range(75)]
+Mid_SES_agents = [copy.deepcopy(Mid_SES) for agent in range(125)]
 testing_environment.train(2000, "SA", Mid_SES_agents)
 
 # Mid SES Agents
@@ -641,7 +641,7 @@ testing_environment.plot_monte_carlo(Mid_SES_agents, show_params=True)
 testing_environment.plot_weighted_rewards(Mid_SES_agents, show_params=True)
 
 
-social_student_agents = [copy.deepcopy(social_student) for agent in range(75)]
+social_student_agents = [copy.deepcopy(social_student) for agent in range(125)]
 testing_environment.train(2000, "SA", social_student_agents)
 
 # Social Student Agents
