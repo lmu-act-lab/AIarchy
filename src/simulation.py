@@ -480,7 +480,7 @@ academic_student = CausalLearningAgent(
     chance_vars={"Tutoring", "Motivation", "SES"},
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 2},
+    fixed_evidence={"SES": 1},
     weights={"grades": 0.5, "health": 0.25, "social": 0.25},
 )
 
@@ -507,7 +507,7 @@ healthy_student = CausalLearningAgent(
     chance_vars={"Tutoring", "Motivation", "SES"},
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 2},
+    fixed_evidence={"SES": 1},
     weights={"grades": 0.25, "health": 0.5, "social": 0.25},
 )
 
@@ -534,7 +534,7 @@ social_student = CausalLearningAgent(
     chance_vars={"Tutoring", "Motivation", "SES"},
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 2},
+    fixed_evidence={"SES": 1},
     weights={"grades": 0.25, "health": 0.25, "social": 0.5},
 )
 
