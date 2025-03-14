@@ -352,7 +352,7 @@ confounding_struct_not_hidden: CausalLearningAgent = CausalLearningAgent(
     sampling_edges=[("chance_1", "refl_1")],
     utility_edges=[("refl_1", "util_1"), ("refl_1", "util_2"), ("chance_1", "util_2")],
     cpts=[
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5, 0.5], [0.5, 0.5]], evidence=['chance_1'], evidence_card=[2]),
         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]])
     ],
     utility_vars={"util_1", "util_2"},
@@ -367,7 +367,7 @@ confounding_struct_hidden: CausalLearningAgent = CausalLearningAgent(
     sampling_edges=[("chance_1", "refl_1")],
     utility_edges=[("refl_1", "util_1"), ("refl_1", "util_2"), ("chance_1", "util_2")],
     cpts=[
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5, 0.5], [0.5, 0.5]], evidence=['chance_1'], evidence_card=[2]),
         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]])
     ],
     utility_vars={"util_1", "util_2"},
@@ -604,22 +604,8 @@ logging.disable(logging.WARNING)
 confounding_hidden_agents = [copy.deepcopy(confounding_struct_hidden) for agent in range(125)]
 testing_environment.train(1000, "SA", confounding_hidden_agents)
 
-# Confounding Hidden Agents
-testing_environment.post_training_visualization(confounding_hidden_agents)
-testing_environment.show_cpt_changes(confounding_hidden_agents)
-testing_environment.plot_monte_carlo(confounding_hidden_agents, show_params=True)
-testing_environment.plot_weighted_rewards(confounding_hidden_agents, show_params=True)
-
-
 confounding_not_hidden_agents = [copy.deepcopy(confounding_struct_not_hidden) for agent in range(125)]
 testing_environment.train(1000, "SA", confounding_not_hidden_agents)
-
-# Confounding Not Hidden Agents
-testing_environment.post_training_visualization(confounding_not_hidden_agents)
-testing_environment.show_cpt_changes(confounding_not_hidden_agents)
-testing_environment.plot_monte_carlo(confounding_not_hidden_agents, show_params=True)
-testing_environment.plot_weighted_rewards(confounding_not_hidden_agents, show_params=True)
-
 
 # struct_1_agents = [copy.deepcopy(struct_1) for agent in range(75)]
 # testing_environment.train(1000, "SA", struct_1_agents)
@@ -634,21 +620,29 @@ testing_environment.plot_weighted_rewards(confounding_not_hidden_agents, show_pa
 Mid_SES_agents = [copy.deepcopy(Mid_SES) for agent in range(125)]
 testing_environment.train(2000, "SA", Mid_SES_agents)
 
+social_student_agents = [copy.deepcopy(social_student) for agent in range(125)]
+testing_environment.train(2000, "SA", social_student_agents)
+
 # Mid SES Agents
 testing_environment.post_training_visualization(Mid_SES_agents)
 testing_environment.show_cpt_changes(Mid_SES_agents)
 testing_environment.plot_monte_carlo(Mid_SES_agents, show_params=True)
 testing_environment.plot_weighted_rewards(Mid_SES_agents, show_params=True)
-
-
-social_student_agents = [copy.deepcopy(social_student) for agent in range(125)]
-testing_environment.train(2000, "SA", social_student_agents)
-
 # Social Student Agents
 testing_environment.post_training_visualization(social_student_agents)
 testing_environment.show_cpt_changes(social_student_agents)
 testing_environment.plot_monte_carlo(social_student_agents, show_params=True)
 testing_environment.plot_weighted_rewards(social_student_agents, show_params=True)
+# Confounding Not Hidden Agents
+testing_environment.post_training_visualization(confounding_not_hidden_agents)
+testing_environment.show_cpt_changes(confounding_not_hidden_agents)
+testing_environment.plot_monte_carlo(confounding_not_hidden_agents, show_params=True)
+testing_environment.plot_weighted_rewards(confounding_not_hidden_agents, show_params=True)
+# Confounding Hidden Agents
+testing_environment.post_training_visualization(confounding_hidden_agents)
+testing_environment.show_cpt_changes(confounding_hidden_agents)
+testing_environment.plot_monte_carlo(confounding_hidden_agents, show_params=True)
+testing_environment.plot_weighted_rewards(confounding_hidden_agents, show_params=True)
 
 
 #|!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!|
