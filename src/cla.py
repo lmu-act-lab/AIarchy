@@ -558,7 +558,7 @@ class CausalLearningAgent:
             variables=query_vars, evidence=do_evidence, show_progress=False
         )
         return query
-
+    @profile
     def time_step(
         self,
         fixed_evidence: dict[str, int],
@@ -566,34 +566,37 @@ class CausalLearningAgent:
         samples: int,
         do: dict[str, int] = {},
     ) -> "TimeStep":
-        memory = pd.DataFrame(columns=list(self.structural_model.nodes()))
-        for _ in range(samples):
-            weighted_reward: dict[str, float] = {}
-            if do:
-                sample_df = self.sampling_model.simulate(
-                    n_samples=1, evidence=fixed_evidence, do=do, show_progress=False
-                )
-            else:
-                sample_df = self.sampling_model.simulate(
-                    n_samples=1, evidence=fixed_evidence, show_progress=False
-                )
-            sample_dict: dict[str, int] = sample_df.iloc[0].to_dict()
-            rewards: dict[str, float] = self.reward_func(
-                sample_dict, self.utility_edges
+        # Generate all samples at once
+        if do:
+            sample_df = self.sampling_model.simulate(
+                n_samples=samples, evidence=fixed_evidence, do=do, show_progress=False
             )
-            for var, weight in weights.items():
-                weighted_reward[var] = rewards[var] * weight
-            combined_dict: pd.DataFrame = pd.DataFrame(
-                [{**sample_dict, **weighted_reward}]
+        else:
+            sample_df = self.sampling_model.simulate(
+                n_samples=samples, evidence=fixed_evidence, show_progress=False
             )
-            memory = pd.concat([memory, combined_dict], ignore_index=True)
+
+        # Compute weighted rewards for each row
+        def compute_weighted_rewards(row):
+            sample_dict = row.to_dict()
+            rewards = self.reward_func(sample_dict, self.utility_edges)
+            # Multiply each reward by its corresponding weight
+            weighted_reward = {var: rewards[var] * weights[var] for var in weights}
+            return pd.Series(weighted_reward)
+
+        weighted_rewards_df = sample_df.apply(compute_weighted_rewards, axis=1)
+
+        # Combine the original samples with the weighted rewards
+        combined_df = pd.concat([sample_df, weighted_rewards_df], axis=1)
+
         return TimeStep(
-            memory,
+            combined_df,
             self.non_utility_vars,
             self.utility_vars,
             weights,
             next(iter(do)) if do else None,
         )
+
 
     def nudge_cpt(
         self,
@@ -689,7 +692,8 @@ class CausalLearningAgent:
 
         cpd.values = normalized_values
         return cpd
-
+    
+    @profile
     def train_SA(self, iterations: int) -> None:
         """
         Train the agent for a specified number of iterations using Simulated Annealing
