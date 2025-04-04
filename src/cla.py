@@ -164,12 +164,9 @@ class CausalLearningAgent:
         self.ema_history: list[dict[str, float]] = []
         self.parent_combinations = self.par_dict()
         self.u_hat_epochs = u_hat_epochs
-        self.model_history: set[BayesianNetwork] = set()
         self.query_history: dict[
             tuple[BayesianNetwork, dict[str, int]], DiscreteFactor
         ] = {}
-        self.model_query = set()
-        self.queries = set()
 
     def par_dict(self):
         utility_to_parent_combos = {}
@@ -754,7 +751,6 @@ class CausalLearningAgent:
                 ):
                     self.weights = adjusted_weights
             else:
-                self.model_history.add(copy.deepcopy(self.sampling_model))
                 tweak_val_comparison: list[dict[str, float]] = []
                 # random_assignment: int = random.randint(
                 #     0, self.card_dict[tweak_var] - 1
@@ -801,20 +797,21 @@ class CausalLearningAgent:
                         #     parent_dict[tweak_var] = tweak_dir
                         # print(f"parent_dict after: {parent_dict}")
                         for parent_dict in self.parent_combinations[utility]:
+                            parent_prob = None
                             reward_attribution: float = 0.0
+                            query = frozenset(
+                                    {
+                                        key: value for key, value in parent_dict.items()
+                                    }.items()
+                                )
                             if (
                                 self.sampling_model,
-                                frozenset(
-                                    {key: value for key, value in parent_dict.items()}
-                                ),
+                                query,
                             ) in self.query_history.keys():
                                 parent_prob = self.query_history[
                                     (
                                         self.sampling_model,
-                                        frozenset({
-                                            key: value
-                                            for key, value in parent_dict.items()
-                                        }),
+                                        query,
                                     )
                                 ]
                             else:
@@ -838,35 +835,12 @@ class CausalLearningAgent:
                                 )[0, 0]
                             )
                             reward[utility] += reward_attribution
-                            self.queries.add(
-                                frozenset(
-                                    {
-                                        key: value for key, value in parent_dict.items()
-                                    }.items()
-                                )
-                            )
                             self.query_history[
                                 (
                                     copy.deepcopy(self.sampling_model),
-                                    frozenset(
-                                        {
-                                            key: value
-                                            for key, value in parent_dict.items()
-                                        }.items()
-                                    ),
+                                    query,
                                 )
                             ] = parent_prob
-                            self.model_query.add(
-                                (
-                                    copy.deepcopy(self.sampling_model),
-                                    frozenset(
-                                        {
-                                            key: value
-                                            for key, value in parent_dict.items()
-                                        }.items()
-                                    ),
-                                )
-                            )
                     # Add expected utility to comparison
                     tweak_val_comparison.append(reward)
                 tweak_val = tweak_val_comparison.index(
@@ -896,17 +870,17 @@ class CausalLearningAgent:
                     #     self.cpt_increase_factor,
                     #     interventional_reward,
                     # )
-                    pass
-                    # adjusted_cpt = self.nudge_cpt_new(
-                    #     self.sampling_model.get_cpds(tweak_var),
-                    #     {tweak_var: tweak_val},
-                    #     self.cpt_increase_factor,
-                    #     interventional_reward,
-                    # )
-                    # self.sampling_model.remove_cpds(
-                    #     self.sampling_model.get_cpds(tweak_var)
-                    # )
-                    # self.sampling_model.add_cpds(adjusted_cpt)
+                    # pass
+                    adjusted_cpt = self.nudge_cpt_new(
+                        self.sampling_model.get_cpds(tweak_var),
+                        {tweak_var: tweak_val},
+                        self.cpt_increase_factor,
+                        interventional_reward,
+                    )
+                    self.sampling_model.remove_cpds(
+                        self.sampling_model.get_cpds(tweak_var)
+                    )
+                    self.sampling_model.add_cpds(adjusted_cpt)
 
             self.memory.append(normal_time_step)
             self.temperature *= self.cooling_factor
