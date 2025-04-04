@@ -9,7 +9,7 @@ from util import *
 from typing import Callable
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from pgmpy.factors.discrete import DiscreteFactor
-from pgmpy.models import BayesianNetwork  # type: ignore
+from ModifiedBayesianNetwork import BayesianNetwork  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
 from types import UnionType
 from cla_neural_network import CLANeuralNetwork as CLANN
@@ -40,6 +40,7 @@ class CausalLearningAgent:
         cpt_increase_factor: float = 0.01,
         downweigh_alpha: float = 0.01,
         cooling_factor: float = 0.99,
+        u_hat_epochs: int = 3,
     ) -> None:
         """
         Initializes two Bayesian Networks, one for sampling and one to maintain structure. Also initializes a number of other variables to be used in the learning process.
@@ -162,6 +163,13 @@ class CausalLearningAgent:
         }
         self.ema_history: list[dict[str, float]] = []
         self.parent_combinations = self.par_dict()
+        self.u_hat_epochs = u_hat_epochs
+        self.model_history: set[BayesianNetwork] = set()
+        self.query_history: dict[
+            tuple[BayesianNetwork, dict[str, int]], DiscreteFactor
+        ] = {}
+        self.model_query = set()
+        self.queries = set()
 
     def par_dict(self):
         utility_to_parent_combos = {}
@@ -558,7 +566,8 @@ class CausalLearningAgent:
             variables=query_vars, evidence=do_evidence, show_progress=False
         )
         return query
-    @profile
+
+    # @profile
     def time_step(
         self,
         fixed_evidence: dict[str, int],
@@ -597,7 +606,6 @@ class CausalLearningAgent:
             next(iter(do)) if do else None,
         )
 
-
     def nudge_cpt(
         self,
         cpd: TabularCPD,
@@ -629,7 +637,9 @@ class CausalLearningAgent:
 
         tuple_indices: tuple[int, ...] = tuple(indices)
 
-        values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+        values[tuple_indices] += np.round(
+            values[tuple_indices] * increase_factor * reward, decimals=3
+        )
 
         sum_values: list = np.sum(values, axis=0)
         normalized_values: list = values / sum_values
@@ -684,16 +694,18 @@ class CausalLearningAgent:
 
             tuple_indices: tuple[int, ...] = tuple(indices)
 
-            values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+            values[tuple_indices] += np.round(
+                values[tuple_indices] * increase_factor * reward, decimals=3
+            )
 
         # Corrected the indentation to ensure normalization happens after the loop
         sum_values: np.ndarray = np.sum(values, axis=0)
-        normalized_values: np.ndarray = values / sum_values
+        normalized_values: np.ndarray = np.round(values / sum_values, decimals=4)
 
         cpd.values = normalized_values
         return cpd
-    
-    @profile
+
+    # @profile
     def train_SA(self, iterations: int) -> None:
         """
         Train the agent for a specified number of iterations using Simulated Annealing
@@ -723,7 +735,7 @@ class CausalLearningAgent:
             )
             for util, model in self.u_hat_models.items():
                 numeric = normal_time_step.memory.apply(pd.to_numeric)
-                model.train(numeric)
+                model.train(numeric, epochs=self.u_hat_epochs)
 
             if tweak_var in utility_to_adjust:
                 adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
@@ -742,6 +754,7 @@ class CausalLearningAgent:
                 ):
                     self.weights = adjusted_weights
             else:
+                self.model_history.add(copy.deepcopy(self.sampling_model))
                 tweak_val_comparison: list[dict[str, float]] = []
                 # random_assignment: int = random.randint(
                 #     0, self.card_dict[tweak_var] - 1
@@ -788,18 +801,71 @@ class CausalLearningAgent:
                         #     parent_dict[tweak_var] = tweak_dir
                         # print(f"parent_dict after: {parent_dict}")
                         for parent_dict in self.parent_combinations[utility]:
-                            reward[utility] += (
-                                # Get probability of parent values given tweak direction
-                                self.cdn_query(
-                                    [key for key in parent_dict.keys()],
-                                    {tweak_var: tweak_dir},
-                                ).get_value(
-                                    **{key: value for key, value in parent_dict.items()}
+                            reward_attribution: float = 0.0
+                            if (
+                                self.sampling_model,
+                                frozenset(
+                                    {key: value for key, value in parent_dict.items()}
+                                ),
+                            ) in self.query_history.keys():
+                                parent_prob = self.query_history[
+                                    (
+                                        self.sampling_model,
+                                        frozenset({
+                                            key: value
+                                            for key, value in parent_dict.items()
+                                        }),
+                                    )
+                                ]
+                            else:
+                                parent_prob = (
+                                    # Get probability of parent values given tweak direction
+                                    self.cdn_query(
+                                        [key for key in parent_dict.keys()],
+                                        {tweak_var: tweak_dir},
+                                    ).get_value(
+                                        **{
+                                            key: value
+                                            for key, value in parent_dict.items()
+                                        }
+                                    )
                                 )
-                                # Multiply by u hat (predicted utility) given current combo of parent values
+                            # Multiply by u hat (predicted utility) given current combo of parent values
+                            reward_attribution = (
+                                parent_prob
                                 * self.u_hat_models[utility].predict(
                                     pd.DataFrame([parent_dict])
                                 )[0, 0]
+                            )
+                            reward[utility] += reward_attribution
+                            self.queries.add(
+                                frozenset(
+                                    {
+                                        key: value for key, value in parent_dict.items()
+                                    }.items()
+                                )
+                            )
+                            self.query_history[
+                                (
+                                    copy.deepcopy(self.sampling_model),
+                                    frozenset(
+                                        {
+                                            key: value
+                                            for key, value in parent_dict.items()
+                                        }.items()
+                                    ),
+                                )
+                            ] = parent_prob
+                            self.model_query.add(
+                                (
+                                    copy.deepcopy(self.sampling_model),
+                                    frozenset(
+                                        {
+                                            key: value
+                                            for key, value in parent_dict.items()
+                                        }.items()
+                                    ),
+                                )
                             )
                     # Add expected utility to comparison
                     tweak_val_comparison.append(reward)
@@ -824,23 +890,23 @@ class CausalLearningAgent:
                     #     filtered_df = filtered_df[filtered_df[var] == value]
                     # for reward_signal in self.get_utilities_from_reflective(tweak_var):
                     #     true_reward += filtered_df[reward_signal].sum()
-
                     # adjusted_cpt = self.nudge_cpt(
                     #     self.sampling_model.get_cpds(tweak_var),
                     #     interventional_time_step.average_sample,
                     #     self.cpt_increase_factor,
                     #     interventional_reward,
                     # )
-                    adjusted_cpt = self.nudge_cpt_new(
-                        self.sampling_model.get_cpds(tweak_var),
-                        {tweak_var: tweak_val},
-                        self.cpt_increase_factor,
-                        interventional_reward,
-                    )
-                    self.sampling_model.remove_cpds(
-                        self.sampling_model.get_cpds(tweak_var)
-                    )
-                    self.sampling_model.add_cpds(adjusted_cpt)
+                    pass
+                    # adjusted_cpt = self.nudge_cpt_new(
+                    #     self.sampling_model.get_cpds(tweak_var),
+                    #     {tweak_var: tweak_val},
+                    #     self.cpt_increase_factor,
+                    #     interventional_reward,
+                    # )
+                    # self.sampling_model.remove_cpds(
+                    #     self.sampling_model.get_cpds(tweak_var)
+                    # )
+                    # self.sampling_model.add_cpds(adjusted_cpt)
 
             self.memory.append(normal_time_step)
             self.temperature *= self.cooling_factor
