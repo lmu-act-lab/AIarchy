@@ -22,6 +22,7 @@ class CLANeuralNetwork:
         self.model = self._build_model(hidden_units)
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.losses = []
 
     def _build_model(self, hidden_units):
         input_size = len(self.input_cols)
@@ -55,21 +56,39 @@ class CLANeuralNetwork:
 
         train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        # Initialize a variable to store the final epoch's loss.
+        final_epoch_loss = None
 
         for epoch in range(epochs):
             self.model.train()
+            epoch_loss = 0.0
+            batch_count = 0
+
             for X_batch, y_batch in train_loader:
                 self.optimizer.zero_grad()
                 outputs = self.model(X_batch)
                 loss = self.criterion(outputs, y_batch)
                 loss.backward()
                 self.optimizer.step()
+
+                epoch_loss += loss.item()
+                batch_count += 1
+
+            # Calculate the average loss for this epoch.
+            avg_epoch_loss = epoch_loss / batch_count if batch_count > 0 else 0
+            final_epoch_loss = avg_epoch_loss  # Update final_epoch_loss with the most recent epoch's loss
+            # print(f'Epoch {epoch+1}/{epochs}, Loss: {avg_epoch_loss:.4f}')
+
+        # Append the final epoch's loss only once per call to train.
+        if final_epoch_loss is not None:
+            self.losses.append(final_epoch_loss)
+            # print(f'Epoch {epoch+1}/{epochs}, Loss: {avg_epoch_loss:.4f}')
             # Optionally, evaluate on validation set
-            if validation_split > 0:
-                self.model.eval()
-                with torch.no_grad():
-                    val_outputs = self.model(X_val)
-                    val_loss = self.criterion(val_outputs, y_val)
+            # if validation_split > 0:
+            #     self.model.eval()
+            #     with torch.no_grad():
+            #         val_outputs = self.model(X_val)
+            #         val_loss = self.criterion(val_outputs, y_val)
                 # print(f'Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}, Val Loss: {val_loss.item():.4f}')
             # else:
                 # print(f'Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}')

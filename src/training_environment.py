@@ -471,3 +471,41 @@ class TrainingEnvironment:
         for var, utility in utility_edges:
             rewards[utility] += sample[var]
         return rewards
+    
+    def plot_u_hat_model_losses(self, agents: list["CausalLearningAgent"]) -> None:
+        """
+        Plots the loss history for each model in the first agent's u_hat_models.
+
+        Parameters
+        ----------
+        agents : list[CausalLearningAgent]
+            A list of causal learning agents. Only the first agent's u_hat_models are plotted.
+        """
+        if not agents:
+            print("No agents provided.")
+            return
+
+        # Use only the first agent.
+        agent = agents[0]
+        
+        # Check if the agent has the u_hat_models attribute and it is not empty.
+        if not hasattr(agent, "u_hat_models") or not agent.u_hat_models:
+            print("The agent does not have any u_hat_models to plot.")
+            return
+
+        plt.figure(figsize=(10, 6))
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+        for i, (model_name, model) in enumerate(agent.u_hat_models.items()):
+            if hasattr(model, "losses") and model.losses:
+                iterations = list(range(len(model.losses)))
+                plt.plot(iterations, model.losses, '-o', color=colors[i % len(colors)], label=f"{model_name}")
+            else:
+                print(f"Model {model_name} does not have a loss history to plot.")
+
+        plt.xlabel("Iteration")
+        plt.ylabel("Loss")
+        plt.title("Loss History for each u_hat_model in the First Agent")
+        plt.legend(loc='best')
+        plt.show()
+

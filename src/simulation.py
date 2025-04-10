@@ -511,32 +511,7 @@ healthy_student = CausalLearningAgent(
     weights={"grades": 0.25, "health": 0.5, "social": 0.25},
 )
 
-social_student = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 1},
-    weights={"grades": 0.25, "health": 0.25, "social": 0.5},
-)
+
 
 
 
@@ -620,17 +595,38 @@ logging.disable(logging.WARNING)
 # Mid_SES_agents = [copy.deepcopy(Mid_SES) for agent in range(1)]
 # testing_environment.train(1, "SA", Mid_SES_agents)
 
-
+social_student = CausalLearningAgent(
+    sampling_edges=[
+        ("SES", "Tutoring"),
+        ("SES", "ECs"),
+        ("SES", "Time studying"),
+        ("Motivation", "Time studying"),
+        ("SES", "Exercise"),
+        ("ECs", "Time studying"),
+        ("Time studying", "Sleep"),
+    ],
+    utility_edges=[
+        ("Time studying", "grades"),
+        ("Tutoring", "grades"),
+        ("ECs", "social"),
+        ("Sleep", "health"),
+        ("Exercise", "health"),
+    ],
+    cpts=list_of_cpts,
+    utility_vars={"grades", "social", "health"},
+    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+    chance_vars={"Tutoring", "Motivation", "SES"},
+    glue_vars=set(),
+    reward_func=testing_environment.default_reward,
+    fixed_evidence={"SES": 1},
+    weights={"grades": 0.25, "health": 0.25, "social": 0.5},
+    u_hat_epochs=1
+)
 
 social_student_agents = [copy.deepcopy(social_student) for agent in range(1)]
-testing_environment.train(10, "SA", social_student_agents)
+testing_environment.train(100, "SA", social_student_agents)
 
-print(len(social_student_agents[0].model_history))
-# print(social_student_agents[0].query_history)
-print(len(social_student_agents[0].model_query))
-print(social_student_agents[0].query_history.keys())
-if (social_student_agents[0].sampling_model, next(iter(social_student_agents[0].model_query))) in social_student_agents[0].query_history:
-    print("True")
+testing_environment.plot_u_hat_model_losses(social_student_agents)
 # Mid SES Agents
 # testing_environment.post_training_visualization(Mid_SES_agents)
 # testing_environment.show_cpt_changes(Mid_SES_agents)
