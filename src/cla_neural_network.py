@@ -51,8 +51,8 @@ class CLANeuralNetwork:
 
         X_train = torch.tensor(train_df[self.input_cols].values, dtype=torch.float32)
         y_train = torch.tensor(train_df[self.output_cols].values, dtype=torch.float32)
-        X_val = torch.tensor(val_df[self.input_cols].values, dtype=torch.float32)
-        y_val = torch.tensor(val_df[self.output_cols].values, dtype=torch.float32)
+        # X_val = torch.tensor(val_df[self.input_cols].values, dtype=torch.float32)
+        # y_val = torch.tensor(val_df[self.output_cols].values, dtype=torch.float32)
 
         train_dataset = torch.utils.data.TensorDataset(X_train, y_train)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
