@@ -747,7 +747,7 @@ class CausalLearningAgent:
                 ) - sum(normal_time_step.average_reward.values())
 
                 if delta >= 0 or random.random() <= np.exp(
-                    (-1 * delta) / self.temperature
+                    (-1 * np.tanh(delta)) / self.temperature
                 ):
                     self.weights = adjusted_weights
             else:
@@ -853,9 +853,8 @@ class CausalLearningAgent:
                     normal_time_step.average_sample, normal_time_step.average_reward
                 )
                 delta = interventional_reward - sum(normal_rewards.values())
-
                 if delta >= 0 or random.random() <= np.exp(
-                    (-1 * delta) / self.temperature
+                    (-1 * np.tanh(delta)) / self.temperature
                 ):
                     # filtered_df: pd.DataFrame = copy.deepcopy(
                     #     interventional_time_step.memory
