@@ -735,7 +735,7 @@ class CausalLearningAgent:
                 model.train(numeric, epochs=self.u_hat_epochs)
 
             if tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
+                adjusted_weights: dict[str, float] = Counter(copy.deepcopy(self.weights))
                 adjusted_weights[tweak_var] *= self.downweigh_factor
                 adjusted_weights = normalize(adjusted_weights)
                 weight_adjusted_time_step: TimeStep = self.time_step(
@@ -804,29 +804,29 @@ class CausalLearningAgent:
                                         key: value for key, value in parent_dict.items()
                                     }.items()
                                 )
-                            if (
-                                self.sampling_model,
-                                query,
-                            ) in self.query_history.keys():
-                                parent_prob = self.query_history[
-                                    (
-                                        self.sampling_model,
-                                        query,
-                                    )
-                                ]
-                            else:
-                                parent_prob = (
-                                    # Get probability of parent values given tweak direction
-                                    self.cdn_query(
-                                        [key for key in parent_dict.keys()],
-                                        {tweak_var: tweak_dir},
-                                    ).get_value(
-                                        **{
-                                            key: value
-                                            for key, value in parent_dict.items()
-                                        }
-                                    )
+                            # if (
+                            #     self.sampling_model,
+                            #     query,
+                            # ) in self.query_history.keys():
+                            #     parent_prob = self.query_history[
+                            #         (
+                            #             self.sampling_model,
+                            #             query,
+                            #         )
+                            #     ]
+                            # else:
+                            parent_prob = (
+                                # Get probability of parent values given tweak direction
+                                self.cdn_query(
+                                    [key for key in parent_dict.keys()],
+                                    {tweak_var: tweak_dir},
+                                ).get_value(
+                                    **{
+                                        key: value
+                                        for key, value in parent_dict.items()
+                                    }
                                 )
+                            )
                             # Multiply by u hat (predicted utility) given current combo of parent values
                             reward_attribution = (
                                 parent_prob
@@ -835,12 +835,12 @@ class CausalLearningAgent:
                                 )[0, 0]
                             )
                             reward[utility] += reward_attribution
-                            self.query_history[
-                                (
-                                    copy.deepcopy(self.sampling_model),
-                                    query,
-                                )
-                            ] = parent_prob
+                            # self.query_history[
+                            #     (
+                            #         copy.deepcopy(self.sampling_model),
+                            #         query,
+                            #     )
+                            # ] = parent_prob
                     # Add expected utility to comparison
                     tweak_val_comparison.append(reward)
                 tweak_val = tweak_val_comparison.index(
