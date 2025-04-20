@@ -30,3 +30,15 @@ class Hierarchy:
         # Then update glue variables on children from parent
 
         pass
+
+
+# TODO:
+# 1. Some students have noise in their reward function
+# 2. Teacher network (can be simple)
+# 3. Special reward function for parents takes pooling function output into account
+# 4. Testing some basic structures again (confounding, anything new?)
+# 5. SAVE matplotlib plots iteratively
+# 6. Organize simulations
+# a) Hierarchy on one machine saving plots as it goes
+# b) Separate models on separate machines to test different parameters (4 machines)
+# c) Make sure to test eta of training on ACT lab machines
