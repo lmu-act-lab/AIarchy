@@ -5,16 +5,16 @@ import matplotlib.pyplot as plt
 import networkx as nx  # type: ignore
 import copy
 import random
-from util import *
+from src.util import *
 from typing import Callable
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from pgmpy.factors.discrete import DiscreteFactor
-from ModifiedBayesianNetwork import BayesianNetwork  # type: ignore
+from src.ModifiedBayesianNetwork import BayesianNetwork  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
 from types import UnionType
-from cla_neural_network import CLANeuralNetwork as CLANN
+from src.cla_neural_network import CLANeuralNetwork as CLANN
 from itertools import product
-from timestep import TimeStep
+from src.timestep import TimeStep
 
 warnings.filterwarnings("ignore")
 
@@ -40,7 +40,9 @@ class CausalLearningAgent:
         cpt_increase_factor: float = 0.01,
         downweigh_alpha: float = 0.01,
         cooling_factor: float = 0.99,
-        u_hat_epochs: int = 3,
+        u_hat_epochs: int = 1,
+        reward_noise: float = 0.0,
+        frustration_threshold: float = 0.25,
     ) -> None:
         """
         Initializes two Bayesian Networks, one for sampling and one to maintain structure. Also initializes a number of other variables to be used in the learning process.
@@ -118,6 +120,7 @@ class CausalLearningAgent:
             {key: 1 / len(self.utility_vars) for key in self.utility_vars}
         )
         self.reward_func = reward_func
+        self.reward_noise = reward_noise
         self.cum_memory: pd.DataFrame
         self.u_hat_models: dict[str, CLANN] = {}
 
@@ -150,7 +153,7 @@ class CausalLearningAgent:
         #         max_reward / len(self.utility_vars)
         #     ) / 2
         for utility in self.utility_vars:
-            self.downweigh_threshold[utility] = 0.25
+            self.downweigh_threshold[utility] = frustration_threshold
         self.original_model: BayesianNetwork = copy.deepcopy(self.sampling_model)
 
         self.parameters: dict[str, UnionType[float, int]] = {
@@ -585,7 +588,7 @@ class CausalLearningAgent:
         # Compute weighted rewards for each row
         def compute_weighted_rewards(row):
             sample_dict = row.to_dict()
-            rewards = self.reward_func(sample_dict, self.utility_edges)
+            rewards = self.reward_func(sample_dict, self.utility_edges, self.reward_noise)
             # Multiply each reward by its corresponding weight
             weighted_reward = {var: rewards[var] * weights[var] for var in weights}
             return pd.Series(weighted_reward)
