@@ -1,5 +1,5 @@
-from cla import CausalLearningAgent as CLA
-from training_environment import TrainingEnvironment
+from src.cla import CausalLearningAgent as CLA
+from src.training_environment import TrainingEnvironment
 
 class Hierarchy:
     def __init__(self, agent_parents: dict[CLA, list[CLA]], pooling_vars: list[str], glue_vars: list[str]):
