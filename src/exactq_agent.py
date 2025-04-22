@@ -2,7 +2,7 @@ from util import Counter
 import random
 import json
 from collections import defaultdict
-from cla import CausalLearningAgent
+from src.cla import CausalLearningAgent
 import numpy as np
 
 
