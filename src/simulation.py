@@ -1,9 +1,9 @@
-from cla import CausalLearningAgent
+from src.cla import CausalLearningAgent
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
-from training_environment import TrainingEnvironment
+from src.training_environment import TrainingEnvironment
 from pgmpy import global_vars
 import copy
-from exactq_agent import ExactQComparisonAgent
+from src.exactq_agent import ExactQComparisonAgent
 import matplotlib.pyplot as plt
 
 testing_environment: TrainingEnvironment = TrainingEnvironment()
