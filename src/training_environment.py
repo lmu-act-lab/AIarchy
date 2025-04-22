@@ -3,10 +3,11 @@ from matplotlib import pyplot as plt
 import matplotlib
 
 matplotlib.use("TkAgg")  # Use 'TkAgg' backend for interactive plots
-from cla import CausalLearningAgent
-from util import Counter
+from src.cla import CausalLearningAgent
+from src.util import Counter
 import time
 import pandas as pd
+import random
 
 
 class TrainingEnvironment:
@@ -29,7 +30,7 @@ class TrainingEnvironment:
         print(f"=== Training End (Elapsed: {end_time - start_time:.2f}s) ===")
         return agents
 
-    def pre_training_visualization(self, agent) -> None:
+    def pre_training_visualization(self, agent, name="", save = False) -> None:
         """
         Visualize the Bayesian Network structure with nodes and directed edges.
         """
@@ -115,9 +116,14 @@ class TrainingEnvironment:
             axs[1].set_title("Parameters")
 
         plt.tight_layout()
-        plt.show()
 
-    def post_training_visualization(self, agents: list["CausalLearningAgent"]) -> None:
+        if save:
+            fig.savefig(f"{name}/pre_training_visualization.png")
+            plt.close(fig)
+        else:
+            plt.show()
+
+    def post_training_visualization(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
         """
         Post-training visualization. Plots parameter evolution (from ema_history) and 
         average utility weights (from each TimeStep's weights) on the same graph using two y-axes.
@@ -175,9 +181,14 @@ class TrainingEnvironment:
         
         ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
         ax1.set_title("Parameter Evolution Over Iterations")
-        plt.show()
 
-    def show_cpt_changes(self, agents: list["CausalLearningAgent"]) -> None:
+        if save:
+            fig.savefig(f"{name}/post_training_visualization.png")
+            plt.close(fig)
+        else:
+            plt.show()
+
+    def show_cpt_changes(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
         """
         Visualize CPD changes by plotting a heatmap for each CPD of the first agent.
         Only CPDs for variables in agent.reflective_vars are plotted.
@@ -242,7 +253,7 @@ class TrainingEnvironment:
             df_delta = cpd_to_df(delta_cpd)
             
             # Create a heatmap with an objective color scale.
-            plt.figure(figsize=(10, 8))
+            fig = plt.figure(figsize=(10, 8))
             sns.heatmap(
                 df_delta,
                 annot=df_original,  # Annotate each cell with the original CPD value.
@@ -255,15 +266,21 @@ class TrainingEnvironment:
             plt.title(f"CPD Changes for {cpd.variable}")
             plt.xlabel("Target State")
             plt.ylabel("Evidence Configuration")
-            plt.show()
+
+            filename = f"{name}/cpt_changes_{cpd.variable}.png"
+            if save:
+                fig.savefig(filename)
+                plt.close(fig)
+            else:
+                plt.show()
 
     def plot_cpt_comparison(
-        self, agent: "CausalLearningAgent", old_cpds: list, new_cpds: list
+        self, agent: "CausalLearningAgent", old_cpds: list, new_cpds: list, name = "", save = False
     ) -> None:
         """
         Plots side-by-side sampling model graphs annotated with old and new CPTs.
         """
-
+        fig = plt.figure(figsize=(12, 5))
         def draw_graph(cpds, title):
             # Clone the original sampling model
             G = nx.DiGraph(agent.structural_model.edges())
@@ -285,10 +302,15 @@ class TrainingEnvironment:
         draw_graph(old_cpds, "Old CPTs")
         plt.subplot(1, 2, 2)
         draw_graph(new_cpds, "New CPTs")
-        plt.show()
+
+        if save:
+            fig.savefig(f"{name}/cpt_comparison.png")
+            plt.close(fig)
+        else:
+            plt.show()
 
     def plot_expected_reward(
-        self, agents: list["CausalLearningAgent"], mc_reps: int
+        self, agents: list["CausalLearningAgent"], mc_reps: int, name="", save=False
     ) -> None:
         """
         Plots the average expected reward over a number of monte carlo repetitions across agents.
@@ -308,15 +330,18 @@ class TrainingEnvironment:
                     total_reward += 0
             average_rewards.append(total_reward / mc_reps)
 
-        plt.figure(figsize=(8, 6))
+        fig = plt.figure(figsize=(8, 6))
         plt.bar(range(len(agents)), average_rewards)
         plt.xlabel("Agent Index")
         plt.ylabel("Average Expected Reward")
         plt.title(f"Expected Reward over {mc_reps} Monte Carlo Repetitions")
-        plt.show()
-
+        if save:
+            fig.savefig(f"{name}/expected_reward.png")
+            plt.close(fig)
+        else:
+            plt.show()
     def plot_monte_carlo(
-        self, agents: list[CausalLearningAgent], show_params: bool = False
+        self, agents: list[CausalLearningAgent], show_params: bool = False, name = "", save = False
     ) -> None:
         """
         Plots the average reward across agents.
@@ -363,13 +388,19 @@ class TrainingEnvironment:
                     fontsize=10,
                     transform=plt.gcf().transFigure,
                 )
+        fig = plt.figure()
         plt.plot(average_rewards)
         plt.xlabel("Iteration")
         plt.ylabel("Average Reward")
         plt.title(f"Average Reward Across {len(agents)} Agents")
-        plt.show()
 
-    def plot_weighted_rewards(self, agents: list[CausalLearningAgent], show_params: bool = False) -> None:
+        if save:
+            fig.savefig(f"{name}/monte_carlo.png")
+            plt.close(fig)
+        else:
+            plt.show()
+
+    def plot_weighted_rewards(self, agents: list[CausalLearningAgent], show_params: bool = False, name = "", save = False) -> None:
         """
         Plots the weighted rewards for each utility for the first agent only.
 
@@ -436,6 +467,7 @@ class TrainingEnvironment:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         
         # Plot the lines for each utility.
+        fig = plt.figure()
         for i, util in enumerate(utilities):
             color = colors[i % len(colors)]
             plt.plot(iterations, subjective_weighted[util], '-o', color=color, label=f"{util} subjective")
@@ -445,10 +477,15 @@ class TrainingEnvironment:
         plt.ylabel("Weighted Reward")
         plt.title("Subjective & Objective Weighted Rewards for First Agent")
         plt.legend()
-        plt.show()
+
+        if save:
+            fig.savefig(f"{name}/weighted_rewards.png")
+            plt.close(fig)
+        else:
+            plt.show()
 
     def original_student_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]]
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
     ) -> dict[str, float]:
         rewards: dict[str, float] = Counter()
         rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
@@ -457,7 +494,7 @@ class TrainingEnvironment:
         return rewards
 
     def test_downweigh_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]]
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
     ) -> dict[str, float]:
         rewards: dict[str, float] = Counter()
         rewards["util_1"] += 0 if sample["refl_1"] == 1 else 1
@@ -465,14 +502,15 @@ class TrainingEnvironment:
         return rewards
 
     def default_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]]
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
     ) -> dict[str, float]:
         rewards: dict[str, float] = Counter()
         for var, utility in utility_edges:
-            rewards[utility] += sample[var]
+            noise_term = random.gauss(0, noise) if noise > 0 else 0.0
+            rewards[utility] += sample[var] + noise
         return rewards
     
-    def plot_u_hat_model_losses(self, agents: list["CausalLearningAgent"]) -> None:
+    def plot_u_hat_model_losses(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
         """
         Plots the loss history for each model in the first agent's u_hat_models.
 
@@ -493,7 +531,7 @@ class TrainingEnvironment:
             print("The agent does not have any u_hat_models to plot.")
             return
 
-        plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(10, 6))
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
         for i, (model_name, model) in enumerate(agent.u_hat_models.items()):
@@ -507,5 +545,8 @@ class TrainingEnvironment:
         plt.ylabel("Loss")
         plt.title("Loss History for each u_hat_model in the First Agent")
         plt.legend(loc='best')
-        plt.show()
-
+        if save:
+            fig.savefig(f"{name}/u_hat_model_losses.png")
+            plt.close(fig)
+        else:
+            plt.show()
