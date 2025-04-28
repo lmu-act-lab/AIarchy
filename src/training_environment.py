@@ -484,32 +484,6 @@ class TrainingEnvironment:
         else:
             plt.show()
 
-    def original_student_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
-    ) -> dict[str, float]:
-        rewards: dict[str, float] = Counter()
-        rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
-        rewards["social"] += sample["ECs"]
-        rewards["health"] += sample["Sleep"] + sample["Exercise"]
-        return rewards
-
-    def test_downweigh_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
-    ) -> dict[str, float]:
-        rewards: dict[str, float] = Counter()
-        rewards["util_1"] += 0 if sample["refl_1"] == 1 else 1
-        rewards["util_2"] += sample["refl_1"]
-        return rewards
-
-    def default_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
-    ) -> dict[str, float]:
-        rewards: dict[str, float] = Counter()
-        for var, utility in utility_edges:
-            noise_term = random.gauss(0, noise) if noise > 0 else 0.0
-            rewards[utility] += sample[var] + noise
-        return rewards
-    
     def plot_u_hat_model_losses(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
         """
         Plots the loss history for each model in the first agent's u_hat_models.
@@ -550,3 +524,34 @@ class TrainingEnvironment:
             plt.close(fig)
         else:
             plt.show()
+
+    def original_student_reward(
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = Counter()
+        rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
+        rewards["social"] += sample["ECs"]
+        rewards["health"] += sample["Sleep"] + sample["Exercise"]
+        return rewards
+
+    def test_downweigh_reward(
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = Counter()
+        rewards["util_1"] += 0 if sample["refl_1"] == 1 else 1
+        rewards["util_2"] += sample["refl_1"]
+        return rewards
+
+    def default_reward(
+        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0, lower_tier_pooled_reward: dict[str, float] = None
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = Counter()
+        for var, utility in utility_edges:
+            noise_term = random.gauss(0, noise) if noise > 0 else 0.0
+            rewards[utility] += sample[var] + noise_term
+
+        if lower_tier_pooled_reward:
+            for util, reward in lower_tier_pooled_reward.items():
+                rewards[util] += reward
+        return rewards
+
