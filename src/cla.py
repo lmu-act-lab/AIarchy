@@ -170,6 +170,7 @@ class CausalLearningAgent:
         self.query_history: dict[
             tuple[BayesianNetwork, dict[str, int]], DiscreteFactor
         ] = {}
+        self.lower_tier_pooled_reward = None
 
     def par_dict(self):
         utility_to_parent_combos = {}
@@ -588,7 +589,7 @@ class CausalLearningAgent:
         # Compute weighted rewards for each row
         def compute_weighted_rewards(row):
             sample_dict = row.to_dict()
-            rewards = self.reward_func(sample_dict, self.utility_edges, self.reward_noise)
+            rewards = self.reward_func(sample_dict, self.utility_edges, self.reward_noise, self.lower_tier_pooled_reward)
             # Multiply each reward by its corresponding weight
             weighted_reward = {var: rewards[var] * weights[var] for var in weights}
             return pd.Series(weighted_reward)
