@@ -1,7 +1,7 @@
 from src.cla import CausalLearningAgent
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from src.training_environment import TrainingEnvironment
-
+import copy
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
 list_of_cpts = [
@@ -77,258 +77,258 @@ list_of_cpts = [
 ]
 
 
-struct_1: CausalLearningAgent = CausalLearningAgent(
-    sampling_edges=[("refl_2", "refl_1")],
-    utility_edges=[("refl_2", "util_2"), ("refl_1", "util_1")],
-    cpts=[
-        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="refl_1",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["refl_2"],
-            evidence_card=[2],
-        ),
-    ],
-    utility_vars={"util_1", "util_2"},
-    reflective_vars={"refl_1", "refl_2"},
-    chance_vars=set(),
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={},
-)
+# struct_1: CausalLearningAgent = CausalLearningAgent(
+#     sampling_edges=[("refl_2", "refl_1")],
+#     utility_edges=[("refl_2", "util_2"), ("refl_1", "util_1")],
+#     cpts=[
+#         TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="refl_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["refl_2"],
+#             evidence_card=[2],
+#         ),
+#     ],
+#     utility_vars={"util_1", "util_2"},
+#     reflective_vars={"refl_1", "refl_2"},
+#     chance_vars=set(),
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={},
+# )
 
-struct_2: CausalLearningAgent = CausalLearningAgent(
-    sampling_edges=[("chance_1", "refl_1"), ("chance_2", "refl_1")],
-    utility_edges=[("refl_1", "util_1")],
-    cpts=[
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="refl_1",
-            variable_card=2,
-            values=[[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]],
-            evidence=["chance_1", "chance_2"],
-            evidence_card=[2, 2],
-        ),
-    ],
-    utility_vars={"util_1"},
-    reflective_vars={"refl_1"},
-    chance_vars={"chance_1", "chance_2"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={},
-)
+# struct_2: CausalLearningAgent = CausalLearningAgent(
+#     sampling_edges=[("chance_1", "refl_1"), ("chance_2", "refl_1")],
+#     utility_edges=[("refl_1", "util_1")],
+#     cpts=[
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="refl_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]],
+#             evidence=["chance_1", "chance_2"],
+#             evidence_card=[2, 2],
+#         ),
+#     ],
+#     utility_vars={"util_1"},
+#     reflective_vars={"refl_1"},
+#     chance_vars={"chance_1", "chance_2"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={},
+# )
 
-struct_3: CausalLearningAgent = CausalLearningAgent(
-    sampling_edges=[("refl_1", "chance_1"), ("refl_2", "chance_1")],
-    utility_edges=[("chance_1", "util_1")],
-    cpts=[
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="chance_1",
-            variable_card=2,
-            values=[[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]],
-            evidence=["refl_1", "refl_2"],
-            evidence_card=[2, 2],
-        ),
-    ],
-    utility_vars={"util_1"},
-    reflective_vars={"refl_1", "refl_2"},
-    chance_vars={"chance_1"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={},
-)
+# struct_3: CausalLearningAgent = CausalLearningAgent(
+#     sampling_edges=[("refl_1", "chance_1"), ("refl_2", "chance_1")],
+#     utility_edges=[("chance_1", "util_1")],
+#     cpts=[
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="chance_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]],
+#             evidence=["refl_1", "refl_2"],
+#             evidence_card=[2, 2],
+#         ),
+#     ],
+#     utility_vars={"util_1"},
+#     reflective_vars={"refl_1", "refl_2"},
+#     chance_vars={"chance_1"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={},
+# )
 
-struct_4: CausalLearningAgent = CausalLearningAgent(
-    [("chance_1", "refl_1")],
-    [("refl_1", "util_1")],
-    [
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="refl_1",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["chance_1"],
-            evidence_card=[2],
-        ),
-    ],
-    {"util_1"},
-    {"refl_1"},
-    {"chance_1"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_4: CausalLearningAgent = CausalLearningAgent(
+#     [("chance_1", "refl_1")],
+#     [("refl_1", "util_1")],
+#     [
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="refl_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["chance_1"],
+#             evidence_card=[2],
+#         ),
+#     ],
+#     {"util_1"},
+#     {"refl_1"},
+#     {"chance_1"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_5: CausalLearningAgent = CausalLearningAgent(
-    [("refl_1", "chance_1")],
-    [("chance_1", "util_1")],
-    [
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="chance_1",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["refl_1"],
-            evidence_card=[2],
-        ),
-    ],
-    {"util_1"},
-    {"refl_1"},
-    {"chance_1"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_5: CausalLearningAgent = CausalLearningAgent(
+#     [("refl_1", "chance_1")],
+#     [("chance_1", "util_1")],
+#     [
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="chance_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["refl_1"],
+#             evidence_card=[2],
+#         ),
+#     ],
+#     {"util_1"},
+#     {"refl_1"},
+#     {"chance_1"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_6 = CausalLearningAgent(
-    [("chance_1", "refl_1"), ("chance_1", "refl_2")],
-    [("refl_1", "util_1"), ("refl_2", "util_1")],
-    [
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="refl_1",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["chance_1"],
-            evidence_card=[2],
-        ),
-        TabularCPD(
-            variable="refl_2",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["chance_1"],
-            evidence_card=[2],
-        ),
-    ],
-    {"util_1"},
-    {"refl_1", "refl_2"},
-    {"chance_1"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_6 = CausalLearningAgent(
+#     [("chance_1", "refl_1"), ("chance_1", "refl_2")],
+#     [("refl_1", "util_1"), ("refl_2", "util_1")],
+#     [
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="refl_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["chance_1"],
+#             evidence_card=[2],
+#         ),
+#         TabularCPD(
+#             variable="refl_2",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["chance_1"],
+#             evidence_card=[2],
+#         ),
+#     ],
+#     {"util_1"},
+#     {"refl_1", "refl_2"},
+#     {"chance_1"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_7 = CausalLearningAgent(
-    [("refl_1", "chance_1"), ("refl_1", "chance_2")],
-    [("chance_1", "util_1"), ("chance_2", "util_1")],
-    [
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="chance_1",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["refl_1"],
-            evidence_card=[2],
-        ),
-        TabularCPD(
-            variable="chance_2",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["refl_1"],
-            evidence_card=[2],
-        ),
-    ],
-    {"util_1"},
-    {"refl_1"},
-    {"chance_1", "chance_2"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_7 = CausalLearningAgent(
+#     [("refl_1", "chance_1"), ("refl_1", "chance_2")],
+#     [("chance_1", "util_1"), ("chance_2", "util_1")],
+#     [
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="chance_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["refl_1"],
+#             evidence_card=[2],
+#         ),
+#         TabularCPD(
+#             variable="chance_2",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["refl_1"],
+#             evidence_card=[2],
+#         ),
+#     ],
+#     {"util_1"},
+#     {"refl_1"},
+#     {"chance_1", "chance_2"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_8: CausalLearningAgent = CausalLearningAgent(
-    [],
-    [("refl_1", "util_1"), ("chance_1", "util_1"), ("chance_2", "util_1")],
-    [
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
-    ],
-    {"util_1"},
-    {"refl_1"},
-    {"chance_1", "chance_2"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_8: CausalLearningAgent = CausalLearningAgent(
+#     [],
+#     [("refl_1", "util_1"), ("chance_1", "util_1"), ("chance_2", "util_1")],
+#     [
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="chance_2", variable_card=2, values=[[0.5], [0.5]]),
+#     ],
+#     {"util_1"},
+#     {"refl_1"},
+#     {"chance_1", "chance_2"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_9: CausalLearningAgent = CausalLearningAgent(
-    [],
-    [("refl_1", "util_1"), ("chance_1", "util_1"), ("refl_2", "util_1")],
-    [
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
-    ],
-    {"util_1"},
-    {"refl_1", "refl_2"},
-    {"chance_1"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_9: CausalLearningAgent = CausalLearningAgent(
+#     [],
+#     [("refl_1", "util_1"), ("chance_1", "util_1"), ("refl_2", "util_1")],
+#     [
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+#     ],
+#     {"util_1"},
+#     {"refl_1", "refl_2"},
+#     {"chance_1"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_10: CausalLearningAgent = CausalLearningAgent(
-    [("chance_1", "refl_1"), ("refl_1", "chance_2")],
-    [("chance_2", "util_1")],
-    [
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(
-            variable="refl_1",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["chance_1"],
-            evidence_card=[2],
-        ),
-        TabularCPD(
-            variable="chance_2",
-            variable_card=2,
-            values=[[0.5, 0.5], [0.5, 0.5]],
-            evidence=["refl_1"],
-            evidence_card=[2],
-        ),
-    ],
-    {"util_1"},
-    {"refl_1"},
-    {"chance_1", "chance_2"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_10: CausalLearningAgent = CausalLearningAgent(
+#     [("chance_1", "refl_1"), ("refl_1", "chance_2")],
+#     [("chance_2", "util_1")],
+#     [
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(
+#             variable="refl_1",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["chance_1"],
+#             evidence_card=[2],
+#         ),
+#         TabularCPD(
+#             variable="chance_2",
+#             variable_card=2,
+#             values=[[0.5, 0.5], [0.5, 0.5]],
+#             evidence=["refl_1"],
+#             evidence_card=[2],
+#         ),
+#     ],
+#     {"util_1"},
+#     {"refl_1"},
+#     {"chance_1", "chance_2"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_11: CausalLearningAgent = CausalLearningAgent(
-    [],
-    [("refl_1", "util_1"), ("chance_1", "util_1")],
-    [
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
-    ],
-    {"util_1"},
-    {"refl_1"},
-    {"chance_1"},
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_11: CausalLearningAgent = CausalLearningAgent(
+#     [],
+#     [("refl_1", "util_1"), ("chance_1", "util_1")],
+#     [
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="chance_1", variable_card=2, values=[[0.5], [0.5]]),
+#     ],
+#     {"util_1"},
+#     {"refl_1"},
+#     {"chance_1"},
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
-struct_13: CausalLearningAgent = CausalLearningAgent(
-    [],
-    [("refl_1", "util_1"), ("refl_2", "util_1")],
-    [
-        TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
-        TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
-    ],
-    {"util_1"},
-    {"refl_1", "refl_2"},
-    set(),
-    set(),
-    testing_environment.default_reward,
-    {},
-)
+# struct_13: CausalLearningAgent = CausalLearningAgent(
+#     [],
+#     [("refl_1", "util_1"), ("refl_2", "util_1")],
+#     [
+#         TabularCPD(variable="refl_1", variable_card=2, values=[[0.5], [0.5]]),
+#         TabularCPD(variable="refl_2", variable_card=2, values=[[0.5], [0.5]]),
+#     ],
+#     {"util_1"},
+#     {"refl_1", "refl_2"},
+#     set(),
+#     set(),
+#     testing_environment.default_reward,
+#     {},
+# )
 
 downweigh_struct: CausalLearningAgent = CausalLearningAgent(
     sampling_edges=[],
@@ -568,6 +568,81 @@ def make_student(ses_value, weights, T, cool, frustr, reward_noise):
         reward_noise=reward_noise
     )
 
+# ----------------------------------------
+# Helper: generic Bernoulli 0.5 CPT
+def bernoulli_cpd(var):
+    return TabularCPD(variable=var, variable_card=2, values=[[0.5], [0.5]])
+
+# ----------------------------------------
+# C1  Confounder (observed vs. hidden)
+confound_obs = CausalLearningAgent(
+    sampling_edges=[("chance", "refl")],
+    utility_edges=[("refl", "util"), ("chance", "util")],
+    cpts=[
+        bernoulli_cpd("chance"),
+        TabularCPD("refl", 2,
+                   [[0.8, 0.2],  # P(refl=0|chance)
+                    [0.2, 0.8]], evidence=["chance"], evidence_card=[2]),
+    ],
+    utility_vars={"util"},
+    reflective_vars={"refl"},
+    chance_vars={"chance"},
+    glue_vars=set(),
+    reward_func=testing_environment.default_reward,
+)
+confound_hidden = copy.deepcopy(confound_obs)
+confound_hidden.hidden_vars = ["chance"]  
+
+# ----------------------------------------
+# C2  Fork (common cause; refl_B irrelevant)
+fork_struct = CausalLearningAgent(
+    sampling_edges=[("chance", "refl_A"), ("chance", "refl_B")],
+    utility_edges=[("refl_A", "util")],  # refl_B has no path
+    cpts=[
+        bernoulli_cpd("chance"),
+        TabularCPD("refl_A", 2,
+                   [[0.9, 0.1], [0.1, 0.9]], evidence=["chance"], evidence_card=[2]),
+        TabularCPD("refl_B", 2,
+                   [[0.7, 0.3], [0.3, 0.7]], evidence=["chance"], evidence_card=[2]),
+    ],
+    utility_vars={"util"},
+    reflective_vars={"refl_A", "refl_B"},
+    chance_vars={"chance"},
+    hidden_vars=["chance"],
+    glue_vars=set(),
+    reward_func=testing_environment.default_reward,
+)
+
+# ----------------------------------------
+# C3  Mediation chain (observed and hidden mid)
+mediation_obs = CausalLearningAgent(
+    sampling_edges=[("refl", "mid")],
+    utility_edges=[("mid", "util")],
+    cpts=[
+        bernoulli_cpd("refl"),
+        TabularCPD("mid", 2,
+                   [[0.8, 0.2], [0.2, 0.8]], evidence=["refl"], evidence_card=[2]),
+    ],
+    utility_vars={"util"},
+    reflective_vars={"refl"},
+    chance_vars={"mid"},    
+    glue_vars=set(),          # mediator is chance
+    reward_func=testing_environment.default_reward,
+)
+
+mediation_hidden = copy.deepcopy(mediation_obs)
+mediation_hidden.hidden_vars = ["mid"]  # mid is hidden
+
+base_structs = {
+    "confound_obs": confound_obs,
+    "confound_hidden": confound_hidden,
+    "fork": fork_struct,
+    "mediation_obs": mediation_obs,
+    "mediation_hidden": mediation_hidden,
+    "downweigh_struct": downweigh_struct,
+}
+
+
 students = {
     "Amy":    make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
     "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0.25),
@@ -586,32 +661,68 @@ students = {
     "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0.5),
 }
 
-base_structures = {
-    "struct_1": struct_1,
-    "struct_2": struct_2,
-    "struct_3": struct_3,
-    "struct_4": struct_4,
-    "struct_5": struct_5,
-    "struct_6": struct_6,
-    "struct_7": struct_7,
-    "struct_8": struct_8,
-    "struct_9": struct_9,
-    "struct_10": struct_10,
-    "struct_11": struct_11,
-    "struct_13": struct_13,
-}
+param_variants: dict[str, CausalLearningAgent] = {}
 
-base_models = {
-    "Low SES": Low_SES,
-    "Mid SES": Mid_SES,
-    "High SES": High_SES,
-    "Academic Student": academic_student,
-    "Healthy Student": healthy_student,
-    "Social Student": social_student,
-    "Downweigh Structure": downweigh_struct,
-    "Confounding Structure (Not Hidden)": confounding_struct_not_hidden,
-    "Confounding Structure (Hidden)": confounding_struct_hidden,
-}
+for name, agent in base_structs.items():
+    # 1. Reward‐noise variant
+    a_noise = copy.deepcopy(agent)
+    a_noise.reward_noise = 0.2
+    param_variants[f"{name}_noise02"] = a_noise
+
+    # 2. High‐sample variant
+    a_samples = copy.deepcopy(agent)
+    a_samples.sample_num = 32
+    param_variants[f"{name}_samples32"] = a_samples
+
+    # 3. Fast‐adaptation variant
+    a_fast = copy.deepcopy(agent)
+    a_fast.downweigh_alpha = 0.1
+    a_fast.cpt_increase_factor = 0.05
+    param_variants[f"{name}_fastAdapt"] = a_fast
+
+    # 4. High‐exploration variant
+    a_explore = copy.deepcopy(agent)
+    a_explore.temperature = 5.0
+    a_explore.cooling_factor = 0.999
+    param_variants[f"{name}_highExplore"] = a_explore
+
+# Merge base + parameter variants
+all_structs = {**base_structs, **param_variants}
+print(len(all_structs))
+
+# Using items() + len() + list slicing 
+# Split dictionary by half
+res1 = dict(list(all_structs.items())[len(all_structs)//2:]) 
+res2 = dict(list(all_structs.items())[:len(all_structs)//2]) 
+
+
+
+# base_structures = {
+#     "struct_1": struct_1,
+#     "struct_2": struct_2,
+#     "struct_3": struct_3,
+#     "struct_4": struct_4,
+#     "struct_5": struct_5,
+#     "struct_6": struct_6,
+#     "struct_7": struct_7,
+#     "struct_8": struct_8,
+#     "struct_9": struct_9,
+#     "struct_10": struct_10,
+#     "struct_11": struct_11,
+#     "struct_13": struct_13,
+# }
+
+# base_models = {
+#     "Low SES": Low_SES,
+#     "Mid SES": Mid_SES,
+#     "High SES": High_SES,
+#     "Academic Student": academic_student,
+#     "Healthy Student": healthy_student,
+#     "Social Student": social_student,
+#     "Downweigh Structure": downweigh_struct,
+#     "Confounding Structure (Not Hidden)": confounding_struct_not_hidden,
+#     "Confounding Structure (Hidden)": confounding_struct_hidden,
+# }
 
 
 
