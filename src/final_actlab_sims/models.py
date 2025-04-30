@@ -645,20 +645,20 @@ base_structs = {
 
 students = {
     "Amy":    make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
-    "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0.25),
-    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0.5),
+    "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
+    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0),
     "Dana":   make_student(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0),
-    "Ethan":  make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0.25),
-    "Farah":  make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0.5),
+    "Ethan":  make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0),
+    "Farah":  make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0),
     "Grace":  make_student(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0),
-    "Hiro":   make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0.25),
-    "Isla":   make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0.5),
+    "Hiro":   make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0),
+    "Isla":   make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0),
     "Jonas":  make_student(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0),
-    "Kiara":  make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0.25),
-    "Leo":    make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0.5),
+    "Kiara":  make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0),
+    "Leo":    make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0),
     "Mei":    make_student(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0),
-    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0.25),
-    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0.5),
+    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0),
+    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0),
 }
 
 param_variants: dict[str, CausalLearningAgent] = {}
@@ -723,6 +723,77 @@ res2 = dict(list(all_structs.items())[:len(all_structs)//2])
 #     "Confounding Structure (Not Hidden)": confounding_struct_not_hidden,
 #     "Confounding Structure (Hidden)": confounding_struct_hidden,
 # }
+grade_leniency_cpd = TabularCPD(
+    variable="grade_leniency",
+    variable_card=2,
+    values=[[0.5], [0.5]]
+)
+
+sampling_edges = [
+    ("SES", "Tutoring"), ("SES", "ECs"), ("SES", "Time studying"),
+    ("Motivation", "Time studying"), ("SES", "Exercise"),
+    ("ECs", "Time studying"), ("Time studying", "Sleep")
+]
+
+new_utility_edges = [
+    ("Time studying", "grades"), ("Tutoring", "grades"),
+    ("ECs", "social"), ("Sleep", "health"), ("Exercise", "health"), ("grade_leniency", "grades")
+]
+
+reflective_vars = {"Time studying", "Exercise", "Sleep", "ECs"}
+new_chance_vars     = {"Tutoring", "Motivation", "SES", "grade_leniency"}
+new_glue_vars   = {"grade_leniency"}
+utility_vars    = {"grades", "social", "health"}
+
+list_of_cpts.append(grade_leniency_cpd.copy())
+
+def make_student(ses_value, weights, T, cool, frustr, reward_noise):
+    return CausalLearningAgent(
+        sampling_edges=sampling_edges,
+        utility_edges=new_utility_edges,
+        cpts=list_of_cpts,
+        utility_vars=utility_vars,
+        reflective_vars=reflective_vars,
+        chance_vars=new_chance_vars,
+        glue_vars=new_glue_vars, 
+        reward_func=testing_environment.default_reward,
+        fixed_evidence={"SES": ses_value},
+        weights=dict(zip(("grades","social","health"), weights)),
+        temperature=T,
+        cooling_factor=cool,
+        frustration_threshold=frustr,
+        reward_noise=reward_noise
+    )
+
+# 2) Create a teacher agent sharing the glue var 'grade_leniency'
+teacher_agent = CausalLearningAgent(
+    sampling_edges=[
+        ("class_size", "teacher_experience"),
+        ("grade_leniency", "student_grades"),
+        ("grade_leniency", "teacher_regulation"),
+    ],
+    utility_edges=[
+        ("grade_leniency", "student_grades"),
+        ("grade_leniency", "teacher_regulation"),
+    ],
+    cpts=[
+        TabularCPD("class_size", 2, [[0.5], [0.5]]),
+        TabularCPD(
+            variable="teacher_experience",
+            variable_card=2,
+            values=[[0.7, 0.3], [0.3, 0.7]],
+            evidence=["class_size"],
+            evidence_card=[2]
+        ),
+        grade_leniency_cpd.copy()
+    ],
+    utility_vars={"student_grades", "teacher_regulation"},
+    reflective_vars={"grade_leniency"},
+    chance_vars={"class_size", "teacher_experience"},
+    glue_vars={"grade_leniency"},
+    reward_func=testing_environment.default_reward,
+    fixed_evidence={}
+)
 
 
 
