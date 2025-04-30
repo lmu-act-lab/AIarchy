@@ -537,6 +537,7 @@ class TrainingEnvironment:
     def test_downweigh_reward(
         self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0, lower_tier_pooled_reward: dict[str, float] = None
     ) -> dict[str, float]:
+
         rewards: dict[str, float] = Counter()
         rewards["util_1"] += 0 if sample["refl_1"] == 1 else 1
         rewards["util_2"] += sample["refl_1"]
