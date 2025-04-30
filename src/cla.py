@@ -163,6 +163,8 @@ class CausalLearningAgent:
             "temperature": self.temperature,
             "downweigh_factor": self.downweigh_factor,
             "ema": self.ema,
+            "agent_weights" : self.weights,
+            "reward_noise" : reward_noise
         }
         self.ema_history: list[dict[str, float]] = []
         self.parent_combinations = self.par_dict()
