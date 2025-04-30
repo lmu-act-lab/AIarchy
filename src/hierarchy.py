@@ -46,6 +46,7 @@ class Hierarchy:
                 for children in self.children:
                     for timestep in children[i].memory:
                         avg_reward += timestep.average_reward[pooling_var]
+                    avg_reward /= len(children[i].memory)
                 avg_reward /= len(self.children)
                 aggregated_rewards.append(avg_reward)
             self.pooling_var_vals[pooling_var] = aggregated_rewards
@@ -65,11 +66,11 @@ class Hierarchy:
                     cpts.append(parents[i].sampling_model.get_cpds(glue_var))
             self.glue_var_cpds[glue_var] = cpts
 
-        pass
-
-                
-
-
+        for children in self.children:
+            for i in range(self.monte_carlo_samples):
+                for glue_var in self.glue_vars:
+                    children[i].sampling_model.remove_cpds(glue_var)
+                    children[i].sampling_model.add_cpds(self.glue_var_cpds[glue_var][i])
 
     def train(self, cycles, parent_iter, child_iter):
         # First train children for child_iter
@@ -77,7 +78,7 @@ class Hierarchy:
         # Parent must have modified reward function to include pooling function output
         # Then train parents for parent_iter
         # Then update glue variables on children from parent
-        for i in range(cycles):
+        for _ in range(cycles):
             for children in self.children:
                 self.TE.train(child_iter, "SA", children)
             self.pooling_func_update()
