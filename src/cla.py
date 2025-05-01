@@ -741,6 +741,8 @@ class CausalLearningAgent:
                 self.fixed_assignment, self.weights, self.sample_num
             )
             for util, model in self.u_hat_models.items():
+                if model is None:
+                    continue
                 numeric = normal_time_step.memory.apply(pd.to_numeric)
                 model.train(numeric, epochs=self.u_hat_epochs)
 
