@@ -133,7 +133,8 @@ class TrainingEnvironment:
         evolve over training iterations.
         """
         fig, ax1 = plt.subplots()
-        fig = plt.figure(figsize=(12, 9))
+        fig.set_figheight(9)
+        fig.set_figwidth(12)
 
         # Plot parameter evolution if ema_history exists.
         if hasattr(agents[0], "ema_history") and agents[0].ema_history:
@@ -506,7 +507,7 @@ class TrainingEnvironment:
             print("The agent does not have any u_hat_models to plot.")
             return
 
-        fig = plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(12, 9))
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
         for i, (model_name, model) in enumerate(agent.u_hat_models.items()):
