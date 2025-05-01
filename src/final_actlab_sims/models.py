@@ -688,6 +688,24 @@ students = {
     "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0),
 }
 
+students_with_noise = {
+    "Amy":    make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0.2),
+    "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0.2),
+    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0.2),
+    "Dana":   make_student(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0.2),
+    "Ethan":  make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0.2),
+    "Farah":  make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0.2),
+    "Grace":  make_student(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0.2),
+    "Hiro":   make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0.2),
+    "Isla":   make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0.2),
+    "Jonas":  make_student(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0.2),
+    "Kiara":  make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0.2),
+    "Leo":    make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0.2),
+    "Mei":    make_student(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0.2),
+    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0.2),
+    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0.2),
+}
+
 param_variants: dict[str, CausalLearningAgent] = {}
 
 for name, agent in base_structs.items():
