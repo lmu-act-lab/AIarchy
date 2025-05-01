@@ -255,7 +255,7 @@ class TrainingEnvironment:
             df_delta = cpd_to_df(delta_cpd)
             
             # Create a heatmap with an objective color scale.
-            fig = plt.figure(figsize=(10, 8))
+            fig = plt.figure(figsize=(20, 8))
             sns.heatmap(
                 df_delta,
                 annot=df_original,  # Annotate each cell with the original CPD value.
