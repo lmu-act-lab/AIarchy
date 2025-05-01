@@ -125,13 +125,17 @@ class CausalLearningAgent:
         self.u_hat_models: dict[str, CLANN] = {}
 
         for utility in self.utility_vars:
-            self.u_hat_models[utility] = CLANN(
-                list(
+            network_inputs = list(
                     set(self.structural_model.get_parents(utility))
                     - set(self.hidden_vars)
-                ),
-                [utility],
-            )
+                )
+            if len(network_inputs) == 0:
+                self.u_hat_models[utility] = None
+            else:
+                self.u_hat_models[utility] = CLANN(
+                    network_inputs,
+                    [utility],
+                )
         self.inference = CausalInference(self.sampling_model)
 
         for cpt in cpts:
@@ -775,6 +779,9 @@ class CausalLearningAgent:
                     # print(f"tweak_dir {tweak_dir}")
                     reward: dict[str, float] = Counter()
                     for utility in self.utility_vars:
+                        if self.u_hat_models[utility] is None:
+                            reward[utility] = 0.0
+                            continue
                         # Get all possible parent combinations for the utility
                         # parent_combinations = list(
                         #     product(
