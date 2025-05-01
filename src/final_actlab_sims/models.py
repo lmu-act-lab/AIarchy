@@ -642,7 +642,6 @@ base_structs = {
     "downweigh_struct": downweigh_struct,
 }
 
-
 students = {
     "Amy":    make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
     "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
@@ -688,14 +687,6 @@ for name, agent in base_structs.items():
 
 # Merge base + parameter variants
 all_structs = {**base_structs, **param_variants}
-print(len(all_structs))
-
-# Using items() + len() + list slicing 
-# Split dictionary by half
-res1 = dict(list(all_structs.items())[len(all_structs)//2:]) 
-res2 = dict(list(all_structs.items())[:len(all_structs)//2]) 
-
-
 
 # base_structures = {
 #     "struct_1": struct_1,
