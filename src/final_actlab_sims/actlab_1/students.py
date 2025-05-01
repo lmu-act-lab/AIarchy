@@ -20,7 +20,7 @@ for name, student_agent in students.items():
     testing_environment.plot_u_hat_model_losses(student_agents, name=name, save=True)
 
 for name, student_agent in students.items():
-    name += "noise"
+    name += "_noise"
     os.makedirs(f"{name}", exist_ok=True)
     testing_environment.pre_training_visualization(student_agent, name=name, save=True)
     student_agents = [copy.deepcopy(student_agent) for agent in range(1)]
