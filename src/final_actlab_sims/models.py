@@ -590,8 +590,22 @@ confound_obs = CausalLearningAgent(
     glue_vars=set(),
     reward_func=testing_environment.default_reward,
 )
-confound_hidden = copy.deepcopy(confound_obs)
-confound_hidden.hidden_vars = ["chance"]  
+confound_hidden = CausalLearningAgent(
+    sampling_edges=[("chance", "refl")],
+    utility_edges=[("refl", "util"), ("chance", "util")],
+    cpts=[
+        bernoulli_cpd("chance"),
+        TabularCPD("refl", 2,
+                   [[0.8, 0.2],  # P(refl=0|chance)
+                    [0.2, 0.8]], evidence=["chance"], evidence_card=[2]),
+    ],
+    utility_vars={"util"},
+    reflective_vars={"refl"},
+    chance_vars={"chance"},
+    glue_vars=set(),
+    hidden_vars = ["chance"],
+    reward_func=testing_environment.default_reward,
+)
 
 # ----------------------------------------
 # C2  Fork (common cause; refl_B irrelevant)
@@ -630,8 +644,22 @@ mediation_obs = CausalLearningAgent(
     reward_func=testing_environment.default_reward,
 )
 
-mediation_hidden = copy.deepcopy(mediation_obs)
-mediation_hidden.hidden_vars = ["mid"]  # mid is hidden
+mediation_hidden = CausalLearningAgent(
+    sampling_edges=[("refl", "mid")],
+    utility_edges=[("mid", "util")],
+    cpts=[
+        bernoulli_cpd("refl"),
+        TabularCPD("mid", 2,
+                   [[0.8, 0.2], [0.2, 0.8]], evidence=["refl"], evidence_card=[2]),
+    ],
+    utility_vars={"util"},
+    reflective_vars={"refl"},
+    chance_vars={"mid"},    
+    glue_vars=set(),          # mediator is chance
+    hidden_vars = ["mid"],  # mid is hidden
+    reward_func=testing_environment.default_reward,
+)
+
 
 base_structs = {
     "confound_obs": confound_obs,
