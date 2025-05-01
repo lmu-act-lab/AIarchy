@@ -133,6 +133,7 @@ class TrainingEnvironment:
         evolve over training iterations.
         """
         fig, ax1 = plt.subplots()
+        fig = plt.figure(figsize=(12, 9))
 
         # Plot parameter evolution if ema_history exists.
         if hasattr(agents[0], "ema_history") and agents[0].ema_history:
@@ -330,7 +331,7 @@ class TrainingEnvironment:
                     total_reward += 0
             average_rewards.append(total_reward / mc_reps)
 
-        fig = plt.figure(figsize=(8, 6))
+        fig = plt.figure(figsize=(12, 9))
         plt.bar(range(len(agents)), average_rewards)
         plt.xlabel("Agent Index")
         plt.ylabel("Average Expected Reward")
@@ -388,7 +389,7 @@ class TrainingEnvironment:
                     fontsize=10,
                     transform=plt.gcf().transFigure,
                 )
-        fig = plt.figure()
+        fig = plt.figure(figsize=(12, 9))
         plt.plot(average_rewards)
         plt.xlabel("Iteration")
         plt.ylabel("Average Reward")
@@ -467,7 +468,7 @@ class TrainingEnvironment:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         
         # Plot the lines for each utility.
-        fig = plt.figure()
+        fig = plt.figure(figsize=(12, 9))
         for i, util in enumerate(utilities):
             color = colors[i % len(colors)]
             plt.plot(iterations, subjective_weighted[util], '-o', color=color, label=f"{util} subjective")
