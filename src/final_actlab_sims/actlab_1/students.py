@@ -3,7 +3,8 @@ from src.training_environment import TrainingEnvironment
 import copy
 import logging
 import os
-
+from src.final_actlab_sims.set_seed import set_seed
+set_seed()
 logging.disable(logging.WARNING)
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
@@ -18,6 +19,7 @@ for name, student_agent in students.items():
     testing_environment.plot_monte_carlo(student_agents, show_params=True, name=name, save=True)
     testing_environment.plot_weighted_rewards(student_agents, show_params=True, name=name, save=True)
     testing_environment.plot_u_hat_model_losses(student_agents, name=name, save=True)
+    testing_environment.save_reward_csv(student_agents, name=name)
 
 for name, student_agent in students.items():
     name += "_noise"
@@ -30,3 +32,4 @@ for name, student_agent in students.items():
     testing_environment.plot_monte_carlo(student_agents, show_params=True, name=name, save=True)
     testing_environment.plot_weighted_rewards(student_agents, show_params=True, name=name, save=True)
     testing_environment.plot_u_hat_model_losses(student_agents, name=name, save=True)
+    testing_environment.save_reward_csv(student_agents, name=name)
