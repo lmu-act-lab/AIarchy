@@ -540,8 +540,8 @@ class TrainingEnvironment:
         reward_data = []
         for agent in agents:
             if agent.memory:
-                last_memory = agent.memory[-1].memory
-                reward_data.append(last_memory.average_reward)
+                last_memory = agent.memory[-1]
+                reward_data.append(sum(last_memory.average_reward.values()))
 
         # Convert to DataFrame and save as CSV
         df = pd.DataFrame(reward_data)
