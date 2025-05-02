@@ -527,6 +527,28 @@ class TrainingEnvironment:
         else:
             plt.show()
 
+    def save_reward_csv(self, agents: list[CausalLearningAgent], name="") -> None:
+        """
+        Saves most recent reward from each agent's memory to a CSV file.
+
+        Parameters
+        ----------
+        agents : list[CausalLearningAgent]
+            Monte Carlo agents to save.
+        """
+        # Create a DataFrame to hold the rewards
+        reward_data = []
+        for agent in agents:
+            if agent.memory:
+                last_memory = agent.memory[-1].memory
+                reward_data.append(last_memory.average_reward)
+
+        # Convert to DataFrame and save as CSV
+        df = pd.DataFrame(reward_data)
+        df.to_csv(f"{name}/rewards.csv", index=False)
+
+    ### reward functions ###
+
     def original_student_reward(
         self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
     ) -> dict[str, float]:
