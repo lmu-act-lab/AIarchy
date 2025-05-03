@@ -861,15 +861,26 @@ class CausalLearningAgent:
                             # ] = parent_prob
                     # Add expected utility to comparison
                     tweak_val_comparison.append(reward)
+                
                 tweak_val = tweak_val_comparison.index(
                     max(tweak_val_comparison, key=lambda x: sum(x.values()))
                 )
 
-                interventional_reward = sum(tweak_val_comparison[tweak_val].values())
+                total_rewards_per_dir = [sum(d.values()) for d in tweak_val_comparison]
+                highest_reward = max(total_rewards_per_dir)
 
-                normal_rewards = self.calculate_expected_reward(
-                    normal_time_step.average_sample, normal_time_step.average_reward
-                )
+                # Gather all tied indices
+                candidates = [i for i, s in enumerate(total_rewards_per_dir) if s == highest_reward]
+
+                # Pick one at random
+                tweak_val = random.choice(candidates)
+
+                interventional_reward = sum(tweak_val_comparison[tweak_val].values())
+                # normal_rewards = self.calculate_expected_reward(
+                #     normal_time_step.average_sample, normal_time_step.average_reward
+                # )
+                normal_rewards = normal_time_step.average_reward
+
                 delta = interventional_reward - sum(normal_rewards.values())
                 if delta >= 0 or random.random() <= np.exp(
                     (-1 * np.tanh(delta)) / self.temperature
