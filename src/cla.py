@@ -743,7 +743,10 @@ class CausalLearningAgent:
             for util, model in self.u_hat_models.items():
                 if model is None:
                     continue
-                numeric = normal_time_step.memory.apply(pd.to_numeric)
+                hidden_removed = normal_time_step.memory.drop(
+                    columns=[col for col in self.hidden_vars]
+                )
+                numeric = hidden_removed.apply(pd.to_numeric)
                 model.train(numeric, epochs=self.u_hat_epochs)
 
             if tweak_var in utility_to_adjust:
