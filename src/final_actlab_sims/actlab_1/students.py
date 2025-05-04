@@ -1,4 +1,4 @@
-from src.final_actlab_sims.models import students, students_with_noise
+from src.final_actlab_sims.models import students
 from src.training_environment import TrainingEnvironment
 import copy
 import logging
