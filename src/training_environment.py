@@ -563,8 +563,9 @@ class TrainingEnvironment:
     ) -> dict[str, float]:
 
         rewards: dict[str, float] = Counter()
-        rewards["util_1"] += 0 if sample["refl_1"] == 1 else 1
-        rewards["util_2"] += sample["refl_1"]
+        noise_term = random.gauss(0, noise) if noise > 0 else 0.0
+        rewards["util_1"] += (0 + noise_term) if sample["refl_1"] == 1 else (1 + noise_term)
+        rewards["util_2"] += sample["refl_1"] + noise_term
         return rewards
 
     def default_reward(
