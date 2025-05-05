@@ -12,8 +12,8 @@ for name, student in students_with_noise.items():
     name += "_noise"
     os.makedirs(f"{name}", exist_ok=True)
     testing_environment.pre_training_visualization(student, name=name, save=True)
-    student_agents = [copy.deepcopy(student) for agent in range(10)]
-    testing_environment.train(10, "SA", student_agents)
+    student_agents = [copy.deepcopy(student) for agent in range(100)]
+    testing_environment.train(2000, "SA", student_agents)
     testing_environment.post_training_visualization(student_agents, name=name, save=True)
     testing_environment.show_cpt_changes(student_agents, name=name,  save=True)
     testing_environment.plot_monte_carlo(student_agents, show_params=True, name=name, save=True)
