@@ -861,7 +861,9 @@ class CausalLearningAgent:
                             # ] = parent_prob
                     # Add expected utility to comparison
                     tweak_val_comparison.append(reward)
-                
+                for rewards in tweak_val_comparison:
+                    for utility in rewards.keys():
+                        rewards[utility] *= self.weights[utility]
                 tweak_val = tweak_val_comparison.index(
                     max(tweak_val_comparison, key=lambda x: sum(x.values()))
                 )
