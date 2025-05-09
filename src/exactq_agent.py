@@ -1,10 +1,12 @@
-from util import Counter
+from src.util import Counter
 import random
 import json
 from collections import defaultdict
 from src.cla import CausalLearningAgent
 import numpy as np
+from src.final_actlab_sims.set_seed import set_seed
 
+set_seed()
 
 class ExactQComparisonAgent:
     def __init__(self, actions, gamma, alpha, cla_agent: CausalLearningAgent) -> None:
@@ -59,10 +61,10 @@ class ExactQComparisonAgent:
         )
         self.eps -= 0.001
         self.iter += 1
-        print(self.iter)
-        # print(self.qvals)
-        print(self.eps)
-        print(best_action)
+        # print(self.iter)
+        # # print(self.qvals)
+        # print(self.eps)
+        # print(best_action)
         return best_action
 
     def sample_current_model(self):
