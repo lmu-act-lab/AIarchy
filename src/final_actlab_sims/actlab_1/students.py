@@ -9,7 +9,7 @@ logging.disable(logging.WARNING)
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
 
-for name, student_agent in students.items():
+for name, student_agent in list(students.items())[::-1]:
     os.makedirs(f"{name}", exist_ok=True)
     testing_environment.pre_training_visualization(student_agent, name=name, save=True)
     student_agents = [copy.deepcopy(student_agent) for agent in range(100)]
