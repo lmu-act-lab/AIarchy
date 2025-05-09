@@ -59,10 +59,10 @@ class ExactQComparisonAgent:
             if (self.iter > 0) and (random.random() > self.eps)
             else random.choice(self.actions)
         )
-        self.eps -= 0.001
+        self.eps -= 0.00006
         self.iter += 1
         # print(self.iter)
-        # # print(self.qvals)
+        # print(self.qvals)
         # print(self.eps)
         # print(best_action)
         return best_action

@@ -9,7 +9,7 @@ set_seed()
 
 for exact in exact_q_agents:
     print(f"agent: {exact_q_agents.index(exact)}")
-    exact.train(2000)
+    exact.train(10000)
 
 average_rewards: list[float] = []
 for iteration in range(len(exact_q_agents[0].reward_tracker)):

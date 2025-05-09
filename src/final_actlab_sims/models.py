@@ -734,6 +734,41 @@ for name, agent in base_structs.items():
 # Merge base + parameter variants
 all_structs = {**base_structs, **param_variants}
 
+from src.exactq_agent import ExactQComparisonAgent
+#  --- EXACT Q SECTION --- #
+actions = [("Time studying", 0), ("Time studying", 1), ("Time studying", 2), ("Exercise", 0), ("Exercise", 1), ("Sleep", 0), ("Sleep", 1), ("Sleep", 2), ("ECs", 0), ("ECs", 1)]
+
+actions = [(action, 0.01) for action in actions[::-1]]
+
+exact_q_agents = [copy.deepcopy(ExactQComparisonAgent(actions = actions, gamma = 0.1, alpha = 0.01, cla_agent=copy.deepcopy(students["Ben"]))) for i in range(100)]
+
+# for exact in agents:
+#     print(f"agent: {agents.index(exact)}")
+#     exact.train(2000)
+
+# average_rewards: list[float] = []
+# for iteration in range(len(agents[0].reward_tracker)):
+#     total_reward = 0
+#     for agent in agents:
+#         total_reward += agent.reward_tracker[iteration]
+#     average_rewards.append(total_reward / len(agents))
+
+# for cpt in agents[0].agent.get_cpts():
+#     print(cpt)
+
+# print(agents[0].qvals)
+
+# max_key = max(agents[0].qvals, key=agents[0].qvals.get)
+# print("Key with max value:", max_key)
+# print("Max value:", agents[0].qvals[max_key])
+
+
+# plt.plot(average_rewards)
+# plt.xlabel('Iterations')
+# plt.ylabel('Reward')
+# plt.title('Reward Tracker Over Iterations')
+# plt.show()
+
 # base_structures = {
 #     "struct_1": struct_1,
 #     "struct_2": struct_2,
@@ -831,9 +866,4 @@ teacher_agent = CausalLearningAgent(
     reward_func=testing_environment.default_reward,
     fixed_evidence={}
 )
-
-
-
-
-
 
