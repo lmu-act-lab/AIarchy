@@ -9,6 +9,28 @@ import time
 import pandas as pd
 import random
 
+# --- colour map -----------------------------------------------------------
+# (All hex codes are colour-blind–safe; tweak as you like)
+COLORS = {
+    "util_1":  "#1b9e77",   # teal-green
+    "util_2":  "#d95f02",   # orange
+    "social":  "#7570b3",   # indigo
+    "grades":  "#e7298a",   # magenta
+    "health":  "#66a61e",   # olive
+    "util":    "#e6ab02",   # mustard
+    # fallback colour for anything not listed above
+    "_default": "#333333",  # dark grey
+}
+
+def lookup_color(var_name: str, i: int = 0) -> str:
+    """
+    Return the registered colour for `var_name` or fall back to the default
+    Matplotlib cycle (offset by i).
+    """
+    if var_name in COLORS:
+        return COLORS[var_name]
+    # cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    # return COLORS["_default"] if not cycle else cycle[i % len(cycle)]
 
 class TrainingEnvironment:
     def train(
@@ -142,7 +164,8 @@ class TrainingEnvironment:
             x_params = list(range(len(history)))
             for key in history[0].keys():
                 y_params = [d[key] for d in history]
-                ax1.plot(x_params, y_params, label=f"EMA: {key}")
+                color = lookup_color(key, 0)
+                ax1.plot(x_params, y_params, label=f"EMA: {key}", color=color)
             ax1.set_xlabel("Iteration")
             ax1.set_ylabel("EMA Value")
         else:
@@ -157,10 +180,10 @@ class TrainingEnvironment:
             for t in range(num_iterations):
                 for util in utilities:
                     total_weight = 0.0
-                    for agent in agents:
+                    for agent in [agents[0]]:
                         timestep = agent.memory[t]
                         total_weight += timestep.weights[util]
-                    avg_weight = total_weight / len(agents)
+                    avg_weight = total_weight / len([agents[0]])
                     weights_over_time[util].append(avg_weight)
             x_weights = list(range(num_iterations))
             
@@ -168,8 +191,9 @@ class TrainingEnvironment:
             ax2 = ax1.twinx()
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             for i, util in enumerate(utilities):
-                color = colors[i % len(colors)]
-                ax2.plot(x_weights, weights_over_time[util], '-o', color=color, label=f"{util} weight")
+                color = lookup_color(util, i)
+                ax2.plot(x_weights, weights_over_time[util], "-o",
+             color=color, label=f"{util} weight")
             ax2.set_ylabel("Average Utility Weight")
         else:
             print("No memory available for plotting weights.")
@@ -471,9 +495,11 @@ class TrainingEnvironment:
         # Plot the lines for each utility.
         fig = plt.figure(figsize=(12, 9))
         for i, util in enumerate(utilities):
-            color = colors[i % len(colors)]
-            plt.plot(iterations, subjective_weighted[util], '-o', color=color, label=f"{util} subjective")
-            plt.plot(iterations, objective_weighted[util], '--', color=color, label=f"{util} objective")
+            color = lookup_color(util, i)
+            plt.plot(iterations, subjective_weighted[util], "-o",
+                    color=color, label=f"{util} subjective")
+            plt.plot(iterations, objective_weighted[util], "--",
+                    color=color, label=f"{util} objective")
         
         plt.xlabel("Iteration")
         plt.ylabel("Weighted Reward")
@@ -513,7 +539,9 @@ class TrainingEnvironment:
         for i, (model_name, model) in enumerate(agent.u_hat_models.items()):
             if hasattr(model, "losses") and model.losses:
                 iterations = list(range(len(model.losses)))
-                plt.plot(iterations, model.losses, '-o', color=colors[i % len(colors)], label=f"{model_name}")
+                color = lookup_color(model_name, i)          # ← use the registry
+                plt.plot(iterations, model.losses, '-o',
+                        color=color, label=f"{model_name}")
             else:
                 print(f"Model {model_name} does not have a loss history to plot.")
 
