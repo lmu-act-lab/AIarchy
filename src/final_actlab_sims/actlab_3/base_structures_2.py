@@ -9,12 +9,12 @@ logging.disable(logging.WARNING)
 set_seed()
 testing_environment: TrainingEnvironment = TrainingEnvironment()
 
-unfinished = ["downweigh_struct_samples32", "downweigh_struct_fastAdapt", "downweigh_struct_highExplore"]
+# unfinished = ["downweigh_struct_samples32", "downweigh_struct_fastAdapt", "downweigh_struct_highExplore"]
 for name, structure in all_structs.items():
     os.makedirs(f"{name}", exist_ok=True)
-    if name not in unfinished:
-        print(f"Already finished {name}.")
-        continue
+    # if name not in unfinished:
+    #     print(f"Already finished {name}.")
+    #     continue
     testing_environment.pre_training_visualization(structure, name=name, save=True)
     structure_agents = [copy.deepcopy(structure) for agent in range(100)]
     testing_environment.train(2000, "SA", structure_agents)
