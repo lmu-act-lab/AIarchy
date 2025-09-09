@@ -122,7 +122,7 @@ class CausalLearningAgent:
         self.reward_func = reward_func
         self.reward_noise = reward_noise
         self.cum_memory: pd.DataFrame
-        self.u_hat_models: dict[str, CLANN] = {}
+        self.u_hat_models: dict[str, CLANN | None] = {}
 
         for utility in self.utility_vars:
             network_inputs = list(
@@ -179,6 +179,15 @@ class CausalLearningAgent:
         self.lower_tier_pooled_reward = None
 
     def par_dict(self):
+        """
+        Build a mapping from each utility variable to all combinations of its parents' values.
+
+        Returns
+        -------
+        dict[str, list[dict[str, int]]]
+            For each utility, a list of dictionaries where each dictionary assigns a value
+            to every parent of that utility.
+        """
         utility_to_parent_combos = {}
         for utility in self.utility_vars:
             # Get all possible parent combinations for the utility
@@ -191,7 +200,6 @@ class CausalLearningAgent:
                 )
             )
             all_combos = []
-            # print(f"parent combos: {parent_combinations}")
             for parent_values in parent_combinations:
                 # Create dictionary of parents and their values
                 parent_dict = {
@@ -268,15 +276,6 @@ class CausalLearningAgent:
             print(normal_time_step)
             print("\n")
 
-    # def display_weights(self) -> None:
-    #     """
-    #     Displays the weights of the agent.
-    #     """
-    #     for time_step, weights in self.weight_history.items():
-    #         print(f"Iteration {time_step}:")
-    #         print(weights)
-    #         print("\n")
-    #
 
     def display_cpts(self) -> None:
         """
@@ -554,7 +553,23 @@ class CausalLearningAgent:
         cpd: TabularCPD = self.original_model.get_cpds(variable)
         return cpd.values[value]
 
-    def cdn_query(self, query_vars, do_evidence):
+    def cdn_query(self, query_vars: list[str], do_evidence: dict[str, int]):
+        """
+        Query the sampling model under a do-intervention, handling any overlap between
+        queried variables and intervention variables.
+
+        Parameters
+        ----------
+        query_vars : list[str]
+            Variables to query.
+        do_evidence : dict[str, int]
+            Interventional assignments applied via do().
+
+        Returns
+        -------
+        DiscreteFactor
+            Factor over the queried variables under the intervention.
+        """
         shared_vars = [var for var in query_vars if var in do_evidence.keys()]
         if len(shared_vars) > 0:
             model_copy = self.sampling_model.copy()
@@ -582,6 +597,26 @@ class CausalLearningAgent:
         samples: int,
         do: dict[str, int] = {},
     ) -> "TimeStep":
+        """
+        Simulate one time step by generating samples, computing per-utility rewards,
+        and returning a summary `TimeStep`.
+
+        Parameters
+        ----------
+        fixed_evidence : dict[str, int]
+            Evidence to condition the simulation on.
+        weights : dict[str, float]
+            Current utility weights used for weighted rewards.
+        samples : int
+            Number of samples to simulate.
+        do : dict[str, int], optional
+            Optional do-intervention assignments for reflective variables, by default {}.
+
+        Returns
+        -------
+        TimeStep
+            Record of samples, weighted rewards, and summary statistics.
+        """
         # Generate all samples at once
         if do:
             sample_df = self.sampling_model.simulate(
@@ -715,7 +750,7 @@ class CausalLearningAgent:
     # @profile
     def train_SA(self, iterations: int) -> None:
         """
-        Train the agent for a specified number of iterations using Simulated Annealing
+        Train the agent using simulated annealing for a number of iterations.
 
         Parameters
         ----------
@@ -723,279 +758,157 @@ class CausalLearningAgent:
             Number of iterations to train the agent for.
         """
         while iterations > 0:
+            # Track EMA history for analysis and plotting
             self.ema_history.append(copy.deepcopy(self.ema))
-            utility_to_adjust: set[str] = set()
-            if len(self.memory) > 0:
-                for var, ema in self.ema.items():
-                    new_ema = (1 - self.downweigh_alpha) * (ema) + (
-                        self.downweigh_alpha * self.memory[-1].average_reward[var]
-                    )
-                    self.ema[var] = new_ema
-                    if new_ema < self.downweigh_threshold[var]:
-                        utility_to_adjust.add(var)
 
-            tweak_var: str = random.choice(
-                list(utility_to_adjust | self.reflective_vars)
-            )
-            normal_time_step: TimeStep = self.time_step(
-                self.fixed_assignment, self.weights, self.sample_num
-            )
-            for util, model in self.u_hat_models.items():
-                if model is None:
-                    continue
-                hidden_removed = normal_time_step.memory.drop(
-                    columns=[col for col in self.hidden_vars]
-                )
-                numeric = hidden_removed.apply(pd.to_numeric)
-                model.train(numeric, epochs=self.u_hat_epochs)
+            # Step 1: update EMA and identify which utilities to downweigh
+            utilities_to_downweigh: set[str] = self._update_ema_and_collect_adjustments()
 
-            if tweak_var in utility_to_adjust:
-                adjusted_weights: dict[str, float] = Counter(copy.deepcopy(self.weights))
-                adjusted_weights[tweak_var] *= self.downweigh_factor
-                adjusted_weights = normalize(adjusted_weights)
-                weight_adjusted_time_step: TimeStep = self.time_step(
-                    self.fixed_assignment, adjusted_weights, self.sample_num
-                )
+            # Step 2: pick a candidate variable to tweak
+            candidate_var: str = random.choice(list(utilities_to_downweigh | self.reflective_vars))
 
-                delta: float = sum(
-                    weight_adjusted_time_step.average_reward.values()
-                ) - sum(normal_time_step.average_reward.values())
+            # Step 3: simulate current policy and train u-hat models
+            normal_time_step: TimeStep = self.time_step(self.fixed_assignment, self.weights, self.sample_num)
+            self._train_u_hat_models(normal_time_step)
 
-                if delta >= 0 or random.random() <= np.exp(
-                    (-1 * np.tanh(delta)) / self.temperature
-                ):
-                    self.weights = adjusted_weights
+            # Step 4: apply either a weight change or a reflective intervention
+            if candidate_var in utilities_to_downweigh:
+                self._maybe_apply_weight_adjustment(candidate_var, normal_time_step)
             else:
-                tweak_val_comparison: list[dict[str, float]] = []
-                # random_assignment: int = random.randint(
-                #     0, self.card_dict[tweak_var] - 1
-                # )
-
-                # interventional_time_step: TimeStep = self.time_step(
-                #     self.fixed_assignment,
-                #     self.weights,
-                #     self.sample_num,
-                #     {tweak_var: random_assignment},
-                # )
-
-                # Compare every possible value for our random tweak variable
-                for tweak_dir in range(self.card_dict[tweak_var]):
-                    # print(f"tweak_var {tweak_var}")
-                    # print(f"tweak_dir {tweak_dir}")
-                    reward: dict[str, float] = Counter()
-                    for utility in self.utility_vars:
-                        if self.u_hat_models[utility] is None:
-                            reward[utility] = 0.0
-                            continue
-                        # Get all possible parent combinations for the utility
-                        # parent_combinations = list(
-                        #     product(
-                        #         *[
-                        #             range(self.card_dict[parent])
-                        #             for parent in self.structural_model.get_parents(
-                        #                 utility
-                        #             )
-                        #         ]
-                        #     )
-                        # )
-                        # print(f"parent combos: {parent_combinations}")
-                        # for parent_values in parent_combinations:
-                        #     # Create dictionary of parents and their values
-                        #     parent_dict = {
-                        #         parent: value
-                        #         for parent, value in zip(
-                        #             self.structural_model.get_parents(utility),
-                        #             parent_values,
-                        #             strict=True,
-                        #         )
-                        #     }
-                        # print(f"parent_dict: {parent_dict}")
-                        # # Tweak var takes precedence over combination of parent values
-                        # if tweak_var in parent_dict.keys():
-                        #     parent_dict[tweak_var] = tweak_dir
-                        # print(f"parent_dict after: {parent_dict}")
-                        for parent_dict in self.parent_combinations[utility]:
-                            parent_prob = None
-                            reward_attribution: float = 0.0
-                            query = frozenset(
-                                    {
-                                        key: value for key, value in parent_dict.items()
-                                    }.items()
-                                )
-                            # if (
-                            #     self.sampling_model,
-                            #     query,
-                            # ) in self.query_history.keys():
-                            #     parent_prob = self.query_history[
-                            #         (
-                            #             self.sampling_model,
-                            #             query,
-                            #         )
-                            #     ]
-                            # else:
-                            parent_prob = (
-                                # Get probability of parent values given tweak direction
-                                self.cdn_query(
-                                    [key for key in parent_dict.keys()],
-                                    {tweak_var: tweak_dir},
-                                ).get_value(
-                                    **{
-                                        key: value
-                                        for key, value in parent_dict.items()
-                                    }
-                                )
-                            )
-                            # Multiply by u hat (predicted utility) given current combo of parent values
-                            reward_attribution = (
-                                parent_prob
-                                * self.u_hat_models[utility].predict(
-                                    pd.DataFrame([parent_dict])
-                                )[0, 0]
-                            )
-                            reward[utility] += reward_attribution
-                            # self.query_history[
-                            #     (
-                            #         copy.deepcopy(self.sampling_model),
-                            #         query,
-                            #     )
-                            # ] = parent_prob
-                    # Add expected utility to comparison
-                    tweak_val_comparison.append(reward)
-                for rewards in tweak_val_comparison:
-                    for utility in rewards.keys():
-                        rewards[utility] *= self.weights[utility]
-                tweak_val = tweak_val_comparison.index(
-                    max(tweak_val_comparison, key=lambda x: sum(x.values()))
-                )
-
-                total_rewards_per_dir = [sum(d.values()) for d in tweak_val_comparison]
-                highest_reward = max(total_rewards_per_dir)
-
-                # Gather all tied indices
-                candidates = [i for i, s in enumerate(total_rewards_per_dir) if s == highest_reward]
-
-                # Pick one at random
-                tweak_val = random.choice(candidates)
-
-                interventional_reward = sum(tweak_val_comparison[tweak_val].values())
-                # normal_rewards = self.calculate_expected_reward(
-                #     normal_time_step.average_sample, normal_time_step.average_reward
-                # )
-                normal_rewards = normal_time_step.average_reward
-
-                delta = interventional_reward - sum(normal_rewards.values())
-                if delta >= 0 or random.random() <= np.exp(
-                    (-1 * np.tanh(delta)) / self.temperature
-                ):
-                    # filtered_df: pd.DataFrame = copy.deepcopy(
-                    #     interventional_time_step.memory
-                    # )
-                    # for var, value in interventional_time_step.average_sample.items():
-                    #     filtered_df = filtered_df[filtered_df[var] == value]
-                    # for reward_signal in self.get_utilities_from_reflective(tweak_var):
-                    #     true_reward += filtered_df[reward_signal].sum()
-                    # adjusted_cpt = self.nudge_cpt(
-                    #     self.sampling_model.get_cpds(tweak_var),
-                    #     interventional_time_step.average_sample,
-                    #     self.cpt_increase_factor,
-                    #     interventional_reward,
-                    # )
-                    # pass
+                chosen_value, interventional_reward = self._evaluate_reflective_assignment(candidate_var, normal_time_step)
+                delta: float = interventional_reward - sum(normal_time_step.average_reward.values())
+                if self._accept_metropolis(delta):
                     adjusted_cpt = self.nudge_cpt_new(
-                        self.sampling_model.get_cpds(tweak_var),
-                        {tweak_var: tweak_val},
+                        self.sampling_model.get_cpds(candidate_var),
+                        {candidate_var: chosen_value},
                         self.cpt_increase_factor,
                         interventional_reward,
                     )
-                    self.sampling_model.remove_cpds(
-                        self.sampling_model.get_cpds(tweak_var)
-                    )
+                    self.sampling_model.remove_cpds(self.sampling_model.get_cpds(candidate_var))
                     self.sampling_model.add_cpds(adjusted_cpt)
 
+            # Step 5: record and cool
             self.memory.append(normal_time_step)
             self.temperature *= self.cooling_factor
             iterations -= 1
 
-    # def train_ME(self, iterations: int) -> None:
-    #     """
-    #     Trains the agent for a specified number of iterations exploiting at every step using interventions.
+    def _update_ema_and_collect_adjustments(self) -> set[str]:
+        """
+        Update EMA of utility rewards and return the set of utilities whose EMA
+        falls below the frustration threshold.
 
-    #     Parameters
-    #     ----------
-    #     iterations : int
-    #         Number of iterations to train the agent for
-    #     """
-    #     while iterations > 0:
-    #         utility_to_adjust: set[str] = set()
-    #         time_steps: set[TimeStep] = set()
+        Returns
+        -------
+        set[str]
+            Utilities that should be considered for downweighing.
+        """
+        utilities_to_downweigh: set[str] = set()
+        if len(self.memory) > 0:
+            for util_name, ema_value in self.ema.items():
+                new_ema = (1 - self.downweigh_alpha) * ema_value + (
+                    self.downweigh_alpha * self.memory[-1].average_reward[util_name]
+                )
+                self.ema[util_name] = new_ema
+                if new_ema < self.downweigh_threshold[util_name]:
+                    utilities_to_downweigh.add(util_name)
+        return utilities_to_downweigh
 
-    #         if len(self.memory) > 0:
-    #             for var, ema in self.ema.items():
-    #                 new_ema = (1 - self.downweigh_alpha) * (
-    #                     ema + self.downweigh_alpha * self.memory[-1][1].average_reward[var]
-    #                 )
-    #                 self.ema[var] = new_ema
-    #                 if new_ema < self.threshold:
-    #                     utility_to_adjust.add(var)
+    def _train_u_hat_models(self, normal_time_step: TimeStep) -> None:
+        """
+        Train per-utility predictive models on the latest simulated samples.
+        """
+        for util_name, model in self.u_hat_models.items():
+            if model is None:
+                continue
+            hidden_removed = normal_time_step.memory.drop(
+                columns=[col for col in self.hidden_vars]
+            )
+            numeric = hidden_removed.apply(pd.to_numeric)
+            model.train(numeric, epochs=self.u_hat_epochs)
 
-    #         for tweak_var in utility_to_adjust:
-    #             adjusted_weights: dict[str, float] = copy.deepcopy(self.weights)
-    #             adjusted_weights[tweak_var] *= self.downweigh_factor
-    #             adjusted_weights = normalize(adjusted_weights)
+    def _maybe_apply_weight_adjustment(
+        self, candidate_var: str, normal_time_step: TimeStep
+    ) -> None:
+        """
+        Try down-weighing the specified utility and accept the change with
+        simulated annealing.
+        """
+        adjusted_weights: dict[str, float] = Counter(copy.deepcopy(self.weights))
+        adjusted_weights[candidate_var] *= self.downweigh_factor
+        adjusted_weights = normalize(adjusted_weights)
 
-    #             time_steps.add(
-    #                 self.time_step(
-    #                     self.fixed_assignment, adjusted_weights, self.sample_num
-    #                 )
-    #             )
+        weight_adjusted_time_step: TimeStep = self.time_step(
+            self.fixed_assignment, adjusted_weights, self.sample_num
+        )
 
-    #         for var, card in self.card_dict.items():
-    #             for val in range(card):
-    #                 time_steps.add(
-    #                     self.time_step(
-    #                         fixed_evidence=self.fixed_assignment,
-    #                         weights=self.weights,
-    #                         samples=self.sample_num,
-    #                         do={var: val},
-    #                     )
-    #                 )
+        delta: float = sum(weight_adjusted_time_step.average_reward.values()) - sum(
+            normal_time_step.average_reward.values()
+        )
 
-    #         best_timestep: TimeStep = max(
-    #             time_steps, key=lambda time_step: sum(time_step.average_reward.values())
-    #         )
+        if self._accept_metropolis(delta):
+            self.weights = adjusted_weights
 
-    #         if best_timestep.weights != self.weights:
-    #             self.memory.append((best_timestep, best_timestep))
-    #             self.weights = best_timestep.weights
-    #         else:
-    #             true_reward: float = 0
-    #             filtered_df: pd.DataFrame = best_timestep.memory
-    #             for var, value in best_timestep.average_sample.items():
-    #                 filtered_df = filtered_df[filtered_df[var] == value]
-    #             for reward_signal in self.get_utilities_from_reflective(
-    #                 best_timestep.tweak_var
-    #             ):
-    #                 true_reward += filtered_df[reward_signal].sum()
-    #             adjusted_cpt = self.nudge_cpt(
-    #                 self.sampling_model.get_cpds(best_timestep.tweak_var),
-    #                 best_timestep.average_sample,
-    #                 self.cpt_increase_factor,
-    #                 true_reward,
-    #             )
-    #             self.sampling_model.remove_cpds(
-    #                 self.sampling_model.get_cpds(best_timestep.tweak_var)
-    #             )
-    #             self.sampling_model.add_cpds(adjusted_cpt)
-    #             self.memory.append(
-    #                 (
-    #                     best_timestep,
-    #                     self.time_step(
-    #                         self.fixed_assignment, self.weights, self.sample_num
-    #                     ),
-    #                 )
-    #             )
+    def _accept_metropolis(self, delta: float) -> bool:
+        """
+        Metropolis acceptance criterion used by simulated annealing.
+        """
+        return bool(
+            delta >= 0 or random.random() <= np.exp((-1 * np.tanh(delta)) / self.temperature)
+        )
 
-    #         iterations -= 1
+    def _evaluate_reflective_assignment(
+        self, reflective_var: str, normal_time_step: TimeStep
+    ) -> tuple[int, float]:
+        """
+        Evaluate each possible assignment for a reflective variable by combining
+        (a) the probability of parents under a do-intervention and (b) the
+        predicted utility from the u-hat model. Returns the best assignment and
+        its total weighted reward (post-weights).
+
+        Parameters
+        ----------
+        reflective_var : str
+            Reflective variable to intervene on.
+        normal_time_step : TimeStep
+            Time step computed with current weights (baseline for comparison).
+
+        Returns
+        -------
+        tuple[int, float]
+            (chosen_value, interventional_reward_sum)
+        """
+        per_value_rewards: list[dict[str, float]] = []
+
+        for candidate_value in range(self.card_dict[reflective_var]):
+            utility_reward_by_name: dict[str, float] = Counter()
+            for utility in self.utility_vars:
+                if self.u_hat_models[utility] is None:
+                    utility_reward_by_name[utility] = 0.0
+                    continue
+                for parent_dict in self.parent_combinations[utility]:
+                    parent_prob = self.cdn_query(
+                        [key for key in parent_dict.keys()],
+                        {reflective_var: candidate_value},
+                    ).get_value(
+                        **{key: value for key, value in parent_dict.items()}
+                    )
+                    predicted_utility = self.u_hat_models[utility].predict(
+                        pd.DataFrame([parent_dict])
+                    )[0, 0]
+                    utility_reward_by_name[utility] += parent_prob * predicted_utility
+            per_value_rewards.append(utility_reward_by_name)
+
+        # Apply current objective weights
+        for rewards in per_value_rewards:
+            for utility in rewards.keys():
+                rewards[utility] *= self.weights[utility]
+
+        total_by_value = [sum(d.values()) for d in per_value_rewards]
+        best_total = max(total_by_value)
+        candidate_indices = [i for i, s in enumerate(total_by_value) if s == best_total]
+        chosen_value = random.choice(candidate_indices)
+        interventional_reward = sum(per_value_rewards[chosen_value].values())
+        return chosen_value, interventional_reward
 
     def get_utilities_from_reflective(self, reflective_var: str) -> list[str]:
         """
@@ -1064,14 +977,14 @@ class CausalLearningAgent:
         )
         return delta_cpd
 
-    def write_cpds_to_csv(self, cpds: DiscreteFactor, name: str, folder: str) -> None:
+    def write_cpds_to_csv(self, cpds: list[TabularCPD], name: str, folder: str) -> None:
         """
         Write CPDs to a CSV file.
 
         Parameters
         ----------
-        cpds : DiscreteFactor
-            CPDs to write to a CSV file
+        cpds : list[TabularCPD]
+            CPDs to write to a CSV file.
         name : str
             Name of the file.
         folder : str
@@ -1085,15 +998,15 @@ class CausalLearningAgent:
             df.to_csv(f"{folder}/{file_name}")
 
     def write_delta_cpd_to_csv(
-        self, cpds: DiscreteFactor, name: str, folder: str
+        self, cpds: list[TabularCPD], name: str, folder: str
     ) -> None:
         """
         Write the delta of CPDs to a CSV file.
 
         Parameters
         ----------
-        cpds : DiscreteFactor
-            CPDs to write to a CSV file
+        cpds : list[TabularCPD]
+            CPDs to write to a CSV file.
         name : str
             Name of the file.
         folder : str
