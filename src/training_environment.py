@@ -2,25 +2,27 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import matplotlib
 
-matplotlib.use("TkAgg")  # Use 'TkAgg' backend for interactive plots
+matplotlib.use("Agg")  # Use 'TkAgg' backend for interactive plots
 from src.cla import CausalLearningAgent
 from src.util import Counter
 import time
 import pandas as pd
 import random
+import numpy as np
 
 # --- colour map -----------------------------------------------------------
 # (All hex codes are colour-blind–safe; tweak as you like)
 COLORS = {
-    "util_1":  "#1b9e77",   # teal-green
-    "util_2":  "#d95f02",   # orange
-    "social":  "#7570b3",   # indigo
-    "grades":  "#e7298a",   # magenta
-    "health":  "#66a61e",   # olive
-    "util":    "#e6ab02",   # mustard
+    "util_1": "#1b9e77",  # teal-green
+    "util_2": "#d95f02",  # orange
+    "social": "#7570b3",  # indigo
+    "grades": "#e7298a",  # magenta
+    "health": "#66a61e",  # olive
+    "util": "#e6ab02",  # mustard
     # fallback colour for anything not listed above
     "_default": "#333333",  # dark grey
 }
+
 
 def lookup_color(var_name: str, i: int = 0) -> str:
     """
@@ -31,6 +33,7 @@ def lookup_color(var_name: str, i: int = 0) -> str:
         return COLORS[var_name]
     # cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     # return COLORS["_default"] if not cycle else cycle[i % len(cycle)]
+
 
 class TrainingEnvironment:
     def train(
@@ -52,7 +55,7 @@ class TrainingEnvironment:
         print(f"=== Training End (Elapsed: {end_time - start_time:.2f}s) ===")
         return agents
 
-    def pre_training_visualization(self, agent, name="", save = False) -> None:
+    def pre_training_visualization(self, agent, name="", save=False) -> None:
         """
         Visualize the Bayesian Network structure with nodes and directed edges.
         """
@@ -145,11 +148,13 @@ class TrainingEnvironment:
         else:
             plt.show()
 
-    def post_training_visualization(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
+    def post_training_visualization(
+        self, agents: list["CausalLearningAgent"], name="", save=False
+    ) -> None:
         """
-        Post-training visualization. Plots parameter evolution (from ema_history) and 
+        Post-training visualization. Plots parameter evolution (from ema_history) and
         average utility weights (from each TimeStep's weights) on the same graph using two y-axes.
-        
+
         The left y-axis corresponds to the parameter evolution, while the right y-axis
         corresponds to the average utility weights. This allows you to compare how both
         evolve over training iterations.
@@ -160,40 +165,98 @@ class TrainingEnvironment:
 
         # Plot parameter evolution if ema_history exists.
         if hasattr(agents[0], "ema_history") and agents[0].ema_history:
-            history = agents[0].ema_history  # List[dict[str, float]]
-            x_params = list(range(len(history)))
-            for key in history[0].keys():
-                y_params = [d[key] for d in history]
-                color = lookup_color(key, 0)
-                ax1.plot(x_params, y_params, label=f"EMA: {key}", color=color)
-            ax1.set_xlabel("Iteration")
-            ax1.set_ylabel("EMA Value")
+            # Collect histories across agents for bands
+            # Ensure consistent length across agents
+            min_len = min(
+                len(a.ema_history)
+                for a in agents
+                if hasattr(a, "ema_history") and a.ema_history
+            )
+            if min_len > 0:
+                x_params = list(range(min_len))
+                keys = list(agents[0].ema_history[0].keys())
+                for ki, key in enumerate(keys):
+                    # Stack series across agents
+                    series_list = []
+                    for a in agents:
+                        if hasattr(a, "ema_history") and a.ema_history:
+                            series_list.append(
+                                [d[key] for d in a.ema_history[:min_len]]
+                            )
+                    if series_list:
+                        arr = np.asarray(series_list)
+                        mean = arr.mean(axis=0)
+                        std = arr.std(axis=0)
+                        color = lookup_color(key, ki)
+                        ax1.fill_between(
+                            x_params, mean - std, mean + std, color=color, alpha=0.2
+                        )
+                        ax1.plot(
+                            x_params,
+                            mean,
+                            color=color,
+                            linewidth=2,
+                            label=f"EMA: {key}",
+                        )
+                        # Also plot the first agent's raw line faintly to preserve original data
+                        y_first = [d[key] for d in agents[0].ema_history[:min_len]]
+                        ax1.plot(
+                            x_params,
+                            y_first,
+                            color=color,
+                            alpha=0.2,
+                            linewidth=1,
+                            label="_nolegend_",
+                        )
+                ax1.set_xlabel("Iteration")
+                ax1.set_ylabel("EMA Value")
         else:
             print("No parameter history available for plotting.")
-        
+
         # Plot average weights for each utility using a second y-axis.
         if hasattr(agents[0], "memory") and agents[0].memory:
             utilities = list(agents[0].utility_vars)
-            num_iterations = len(agents[0].memory)
-            weights_over_time = {util: [] for util in utilities}
-            # Compute the average weight per utility for each timestep.
-            for t in range(num_iterations):
-                for util in utilities:
-                    total_weight = 0.0
-                    for agent in [agents[0]]:
-                        timestep = agent.memory[t]
-                        total_weight += timestep.weights[util]
-                    avg_weight = total_weight / len([agents[0]])
-                    weights_over_time[util].append(avg_weight)
-            x_weights = list(range(num_iterations))
-            
-            # Create a second y-axis sharing the same x-axis.
+            # Align by minimum memory length across agents
+            min_iters = min(
+                len(a.memory) for a in agents if hasattr(a, "memory") and a.memory
+            )
+            x_weights = list(range(min_iters))
             ax2 = ax1.twinx()
-            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             for i, util in enumerate(utilities):
-                color = lookup_color(util, i)
-                ax2.plot(x_weights, weights_over_time[util], "-o",
-             color=color, label=f"{util} weight")
+                # Build per-agent weight trajectories
+                per_agent = []
+                for a in agents:
+                    if hasattr(a, "memory") and a.memory:
+                        per_agent.append(
+                            [a.memory[t].weights[util] for t in range(min_iters)]
+                        )
+                if per_agent:
+                    arr = np.asarray(per_agent)
+                    mean = arr.mean(axis=0)
+                    std = arr.std(axis=0)
+                    color = lookup_color(util, i)
+                    ax2.fill_between(
+                        x_weights, mean - std, mean + std, color=color, alpha=0.15
+                    )
+                    ax2.plot(
+                        x_weights,
+                        mean,
+                        color=color,
+                        linewidth=2,
+                        label=f"{util} weight",
+                    )
+                    # Also include the first agent's raw weights faintly to preserve original line
+                    raw_first = [
+                        agents[0].memory[t].weights[util] for t in range(min_iters)
+                    ]
+                    ax2.plot(
+                        x_weights,
+                        raw_first,
+                        color=color,
+                        alpha=0.2,
+                        linewidth=1,
+                        label="_nolegend_",
+                    )
             ax2.set_ylabel("Average Utility Weight")
         else:
             print("No memory available for plotting weights.")
@@ -204,8 +267,8 @@ class TrainingEnvironment:
             lines2, labels2 = ax2.get_legend_handles_labels()
         else:
             lines2, labels2 = [], []
-        
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
+
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
         ax1.set_title("Parameter Evolution Over Iterations")
 
         if save:
@@ -214,7 +277,9 @@ class TrainingEnvironment:
         else:
             plt.show()
 
-    def show_cpt_changes(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
+    def show_cpt_changes(
+        self, agents: list["CausalLearningAgent"], name="", save=False
+    ) -> None:
         """
         Visualize CPD changes by plotting a heatmap for each CPD of the first agent.
         Only CPDs for variables in agent.reflective_vars are plotted.
@@ -227,7 +292,7 @@ class TrainingEnvironment:
         # Use only the first agent in the list.
         agent = agents[0]
         cpds = agent.get_cpts()
-        
+
         import seaborn as sns
         from itertools import product
         import pandas as pd
@@ -256,14 +321,18 @@ class TrainingEnvironment:
                 ]
                 # Reshape values to (target_card, product_evidence) then transpose so that rows are evidence configs.
                 reshaped = cpd.values.reshape((target_card, product_evidence)).T
-                df = pd.DataFrame(reshaped,
-                                index=index_labels,
-                                columns=[f"{target}={i}" for i in range(target_card)])
+                df = pd.DataFrame(
+                    reshaped,
+                    index=index_labels,
+                    columns=[f"{target}={i}" for i in range(target_card)],
+                )
             else:
                 # No evidence; create a single-row DataFrame.
-                df = pd.DataFrame(cpd.values.reshape((target_card, 1)).T,
-                                columns=[f"{target}={i}" for i in range(target_card)],
-                                index=["No evidence"])
+                df = pd.DataFrame(
+                    cpd.values.reshape((target_card, 1)).T,
+                    columns=[f"{target}={i}" for i in range(target_card)],
+                    index=["No evidence"],
+                )
             return df
 
         # Loop over each CPD in the agent and only process those whose target is in reflective_vars.
@@ -273,11 +342,11 @@ class TrainingEnvironment:
 
             # Compute the delta CPD (difference from the original CPD)
             delta_cpd = agent.compute_cpd_delta(cpd.variable)
-            
+
             # Convert both the original CPD and the delta CPD to DataFrames.
             df_original = cpd_to_df(cpd)
             df_delta = cpd_to_df(delta_cpd)
-            
+
             # Create a heatmap with an objective color scale.
             fig = plt.figure(figsize=(20, 8))
             sns.heatmap(
@@ -285,9 +354,9 @@ class TrainingEnvironment:
                 annot=df_original,  # Annotate each cell with the original CPD value.
                 fmt=".2f",
                 cmap="RdYlGn",
-                center=0,      # Zero delta is neutral.
-                vmin=-1,       # Fixed minimum for the color scale.
-                vmax=1         # Fixed maximum for the color scale.
+                center=0,  # Zero delta is neutral.
+                vmin=-1,  # Fixed minimum for the color scale.
+                vmax=1,  # Fixed maximum for the color scale.
             )
             plt.title(f"CPD Changes for {cpd.variable}")
             plt.xlabel("Target State")
@@ -301,12 +370,18 @@ class TrainingEnvironment:
                 plt.show()
 
     def plot_cpt_comparison(
-        self, agent: "CausalLearningAgent", old_cpds: list, new_cpds: list, name = "", save = False
+        self,
+        agent: "CausalLearningAgent",
+        old_cpds: list,
+        new_cpds: list,
+        name="",
+        save=False,
     ) -> None:
         """
         Plots side-by-side sampling model graphs annotated with old and new CPTs.
         """
         fig = plt.figure(figsize=(12, 5))
+
         def draw_graph(cpds, title):
             # Clone the original sampling model
             G = nx.DiGraph(agent.structural_model.edges())
@@ -366,8 +441,13 @@ class TrainingEnvironment:
             plt.close(fig)
         else:
             plt.show()
+
     def plot_monte_carlo(
-        self, agents: list[CausalLearningAgent], show_params: bool = False, name = "", save = False
+        self,
+        agents: list[CausalLearningAgent],
+        show_params: bool = False,
+        name="",
+        save=False,
     ) -> None:
         """
         Plots the average reward across agents.
@@ -377,13 +457,23 @@ class TrainingEnvironment:
         agents : list[CausalLearningAgent]
             List of agents to plot.
         """
-        average_rewards: list[float] = []
+        # Build per-agent rewards over iterations
         params: dict[str, UnionType[float, int]] = agents[0].parameters
-        for iteration in range(len(agents[0].memory)):
-            total_reward = 0
-            for agent in agents:
-                total_reward += sum(agent.memory[iteration].average_reward.values())
-            average_rewards.append(total_reward / len(agents))
+        min_iters = min(
+            len(a.memory) for a in agents if hasattr(a, "memory") and a.memory
+        )
+        per_agent_rewards = []
+        for a in agents:
+            if hasattr(a, "memory") and a.memory:
+                per_agent_rewards.append(
+                    [
+                        sum(a.memory[it].average_reward.values())
+                        for it in range(min_iters)
+                    ]
+                )
+        arr = np.asarray(per_agent_rewards)
+        mean = arr.mean(axis=0)
+        std = arr.std(axis=0)
 
         if show_params:
             # Adjust bottom space: less space between parameters, enough for plot
@@ -415,10 +505,13 @@ class TrainingEnvironment:
                     transform=plt.gcf().transFigure,
                 )
         fig = plt.figure(figsize=(12, 9))
-        plt.plot(average_rewards)
+        x = list(range(len(mean)))
+        plt.fill_between(x, mean - std, mean + std, color="#1f77b4", alpha=0.2)
+        plt.plot(x, mean, color="#1f77b4", linewidth=2, label="Mean reward")
         plt.xlabel("Iteration")
         plt.ylabel("Average Reward")
         plt.title(f"Average Reward Across {len(agents)} Agents")
+        plt.legend(loc="best")
 
         if save:
             fig.savefig(f"{name}/monte_carlo.png")
@@ -426,7 +519,13 @@ class TrainingEnvironment:
         else:
             plt.show()
 
-    def plot_weighted_rewards(self, agents: list[CausalLearningAgent], show_params: bool = False, name = "", save = False) -> None:
+    def plot_weighted_rewards(
+        self,
+        agents: list[CausalLearningAgent],
+        show_params: bool = False,
+        name="",
+        save=False,
+    ) -> None:
         """
         Plots the weighted rewards for each utility for the first agent only.
 
@@ -447,26 +546,33 @@ class TrainingEnvironment:
         show_params : bool, optional
             If True, displays the parameters (from the first agent) below the plot.
         """
-        # Use only the first agent.
+        # Use the first agent for parameter display and to preserve original series
         agent = agents[0]
         utilities = list(agent.utility_vars)
-        num_iterations = len(agent.memory)
-        
-        # Dictionaries to hold the weighted rewards per iteration.
-        subjective_weighted = {util: [] for util in utilities}
-        objective_weighted = {util: [] for util in utilities}
-        
-        # Loop through each timestep in the agent's memory.
-        for t in range(num_iterations):
-            timestep = agent.memory[t]
-            for util in utilities:
-                # Compute the weighted subjective reward using the timestep's weight.
-                subjective_reward = timestep.average_reward[util] * timestep.weights[util]
-                # Compute the weighted objective reward using the agent's fixed objective weight.
-                objective_reward = timestep.average_reward[util] * agent.objective_weights[util]
-                subjective_weighted[util].append(subjective_reward)
-                objective_weighted[util].append(objective_reward)
-        
+        # Align by minimum memory length across agents
+        min_iters = min(
+            len(a.memory) for a in agents if hasattr(a, "memory") and a.memory
+        )
+
+        # Build per-agent subjective/objective weighted rewards
+        per_agent_subj = {util: [] for util in utilities}
+        per_agent_obj = {util: [] for util in utilities}
+        for a in agents:
+            if hasattr(a, "memory") and a.memory:
+                for util in utilities:
+                    subj_series = []
+                    obj_series = []
+                    for t in range(min_iters):
+                        timestep = a.memory[t]
+                        subj_series.append(
+                            timestep.average_reward[util] * timestep.weights[util]
+                        )
+                        obj_series.append(
+                            timestep.average_reward[util] * a.objective_weights[util]
+                        )
+                    per_agent_subj[util].append(subj_series)
+                    per_agent_obj[util].append(obj_series)
+
         # Optionally display parameters from the first agent.
         if show_params:
             params = agent.parameters
@@ -475,7 +581,9 @@ class TrainingEnvironment:
             plt.subplots_adjust(bottom=bottom_margin)
             for i, (param, param_val) in enumerate(params.items()):
                 if isinstance(param_val, dict):
-                    param_val_str = ", ".join([f"{k}: {v}" for k, v in param_val.items()])
+                    param_val_str = ", ".join(
+                        [f"{k}: {v}" for k, v in param_val.items()]
+                    )
                 else:
                     param_val_str = str(param_val)
                 plt.figtext(
@@ -488,19 +596,77 @@ class TrainingEnvironment:
                     fontsize=10,
                     transform=plt.gcf().transFigure,
                 )
-        
-        iterations = list(range(num_iterations))
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        
-        # Plot the lines for each utility.
+
+        iterations = list(range(min_iters))
         fig = plt.figure(figsize=(12, 9))
         for i, util in enumerate(utilities):
             color = lookup_color(util, i)
-            plt.plot(iterations, subjective_weighted[util], "-o",
-                    color=color, label=f"{util} subjective")
-            plt.plot(iterations, objective_weighted[util], "--",
-                    color=color, label=f"{util} objective")
-        
+            subj_arr = (
+                np.asarray(per_agent_subj[util]) if per_agent_subj[util] else None
+            )
+            obj_arr = np.asarray(per_agent_obj[util]) if per_agent_obj[util] else None
+            if subj_arr is not None and subj_arr.size > 0:
+                subj_mean = subj_arr.mean(axis=0)
+                subj_std = subj_arr.std(axis=0)
+                plt.fill_between(
+                    iterations,
+                    subj_mean - subj_std,
+                    subj_mean + subj_std,
+                    color=color,
+                    alpha=0.15,
+                )
+                plt.plot(
+                    iterations,
+                    subj_mean,
+                    color=color,
+                    linewidth=2,
+                    label=f"{util} subjective",
+                )
+                # original first-agent series faintly
+                subj_first = [
+                    agent.memory[t].average_reward[util] * agent.memory[t].weights[util]
+                    for t in range(min_iters)
+                ]
+                plt.plot(
+                    iterations,
+                    subj_first,
+                    color=color,
+                    alpha=0.2,
+                    linewidth=1,
+                    label="_nolegend_",
+                )
+            if obj_arr is not None and obj_arr.size > 0:
+                obj_mean = obj_arr.mean(axis=0)
+                obj_std = obj_arr.std(axis=0)
+                plt.fill_between(
+                    iterations,
+                    obj_mean - obj_std,
+                    obj_mean + obj_std,
+                    color=color,
+                    alpha=0.08,
+                )
+                plt.plot(
+                    iterations,
+                    obj_mean,
+                    color=color,
+                    linewidth=2,
+                    linestyle="--",
+                    label=f"{util} objective",
+                )
+                obj_first = [
+                    agent.memory[t].average_reward[util] * agent.objective_weights[util]
+                    for t in range(min_iters)
+                ]
+                plt.plot(
+                    iterations,
+                    obj_first,
+                    color=color,
+                    alpha=0.2,
+                    linewidth=1,
+                    linestyle="--",
+                    label="_nolegend_",
+                )
+
         plt.xlabel("Iteration")
         plt.ylabel("Weighted Reward")
         plt.title("Subjective & Objective Weighted Rewards for First Agent")
@@ -512,7 +678,9 @@ class TrainingEnvironment:
         else:
             plt.show()
 
-    def plot_u_hat_model_losses(self, agents: list["CausalLearningAgent"], name = "", save = False) -> None:
+    def plot_u_hat_model_losses(
+        self, agents: list["CausalLearningAgent"], name="", save=False
+    ) -> None:
         """
         Plots the loss history for each model in the first agent's u_hat_models.
 
@@ -527,28 +695,62 @@ class TrainingEnvironment:
 
         # Use only the first agent.
         agent = agents[0]
-        
+
         # Check if the agent has the u_hat_models attribute and it is not empty.
         if not hasattr(agent, "u_hat_models") or not agent.u_hat_models:
             print("The agent does not have any u_hat_models to plot.")
             return
 
         fig = plt.figure(figsize=(12, 9))
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-        for i, (model_name, model) in enumerate(agent.u_hat_models.items()):
-            if hasattr(model, "losses") and model.losses:
-                iterations = list(range(len(model.losses)))
-                color = lookup_color(model_name, i)          # ← use the registry
-                plt.plot(iterations, model.losses, '-o',
-                        color=color, label=f"{model_name}")
+        # Aggregate across agents per model name
+        model_names = list(agent.u_hat_models.keys())
+        for i, model_name in enumerate(model_names):
+            # Collect losses for this model across agents
+            per_agent_losses = []
+            for a in agents:
+                if (
+                    hasattr(a, "u_hat_models")
+                    and a.u_hat_models
+                    and model_name in a.u_hat_models
+                ):
+                    m = a.u_hat_models[model_name]
+                    if hasattr(m, "losses") and m.losses:
+                        per_agent_losses.append(list(m.losses))
+            if per_agent_losses:
+                # Align by minimum length
+                min_len = min(len(lst) for lst in per_agent_losses)
+                per_agent_losses = [lst[:min_len] for lst in per_agent_losses]
+                arr = np.asarray(per_agent_losses)
+                mean = arr.mean(axis=0)
+                std = arr.std(axis=0)
+                x = list(range(min_len))
+                color = lookup_color(model_name, i)
+                plt.fill_between(x, mean - std, mean + std, color=color, alpha=0.2)
+                plt.plot(x, mean, color=color, linewidth=2, label=f"{model_name}")
+                # original first-agent series faintly if exists
+                first_losses = (
+                    agent.u_hat_models[model_name].losses
+                    if hasattr(agent.u_hat_models[model_name], "losses")
+                    else []
+                )
+                if first_losses:
+                    plt.plot(
+                        x,
+                        list(first_losses)[:min_len],
+                        color=color,
+                        alpha=0.2,
+                        linewidth=1,
+                        label="_nolegend_",
+                    )
             else:
-                print(f"Model {model_name} does not have a loss history to plot.")
+                print(
+                    f"Model {model_name} does not have a loss history to plot across agents."
+                )
 
         plt.xlabel("Iteration")
         plt.ylabel("Loss")
-        plt.title("Loss History for each u_hat_model in the First Agent")
-        plt.legend(loc='best')
+        plt.title("Loss History (mean ± 1 SD across agents) per u_hat_model")
+        plt.legend(loc="best")
         if save:
             fig.savefig(f"{name}/u_hat_model_losses.png")
             plt.close(fig)
@@ -578,7 +780,10 @@ class TrainingEnvironment:
     ### reward functions ###
 
     def original_student_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0
+        self,
+        sample: dict[str, int],
+        utility_edges: list[tuple[str, str]],
+        noise: float = 0.0,
     ) -> dict[str, float]:
         rewards: dict[str, float] = Counter()
         rewards["grades"] += sample["Time studying"] + sample["Tutoring"]
@@ -587,17 +792,27 @@ class TrainingEnvironment:
         return rewards
 
     def test_downweigh_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0, lower_tier_pooled_reward: dict[str, float] = None
+        self,
+        sample: dict[str, int],
+        utility_edges: list[tuple[str, str]],
+        noise: float = 0.0,
+        lower_tier_pooled_reward: dict[str, float] = None,
     ) -> dict[str, float]:
 
         rewards: dict[str, float] = Counter()
         noise_term = random.gauss(0, noise) if noise > 0 else 0.0
-        rewards["util_1"] += (0 + noise_term) if sample["refl_1"] == 1 else (1 + noise_term)
+        rewards["util_1"] += (
+            (0 + noise_term) if sample["refl_1"] == 1 else (1 + noise_term)
+        )
         rewards["util_2"] += sample["refl_1"] + noise_term
         return rewards
 
     def default_reward(
-        self, sample: dict[str, int], utility_edges: list[tuple[str, str]], noise: float = 0.0, lower_tier_pooled_reward: dict[str, float] = None
+        self,
+        sample: dict[str, int],
+        utility_edges: list[tuple[str, str]],
+        noise: float = 0.0,
+        lower_tier_pooled_reward: dict[str, float] = None,
     ) -> dict[str, float]:
         rewards: dict[str, float] = Counter()
         for var, utility in utility_edges:
@@ -607,12 +822,8 @@ class TrainingEnvironment:
             else:
                 rewards[utility] += sample[var] + noise_term
 
-
-
         if lower_tier_pooled_reward:
             for util, reward in lower_tier_pooled_reward.items():
                 rewards[util] += reward
-        
 
         return rewards
-
