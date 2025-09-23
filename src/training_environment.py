@@ -210,6 +210,8 @@ class TrainingEnvironment:
                         )
                 ax1.set_xlabel("Iteration")
                 ax1.set_ylabel("EMA Value")
+                # Fixed axis limits for publication
+                ax1.set_ylim(0, 3)
         else:
             print("No parameter history available for plotting.")
 
@@ -258,6 +260,8 @@ class TrainingEnvironment:
                         label="_nolegend_",
                     )
             ax2.set_ylabel("Average Utility Weight")
+            # Fixed axis limits for publication
+            ax2.set_ylim(0, 1)
         else:
             print("No memory available for plotting weights.")
 
@@ -270,6 +274,22 @@ class TrainingEnvironment:
 
         ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
         ax1.set_title("Parameter Evolution Over Iterations")
+
+        # Save CSVs for EMA and weights for later statistical analysis
+        try:
+            if hasattr(agents[0], "ema_history") and agents[0].ema_history:
+                ema_df = pd.DataFrame(agents[0].ema_history[:min_len])
+                ema_df.to_csv(f"{name}/ema_history.csv", index=False)
+            if hasattr(agents[0], "memory") and agents[0].memory:
+                util_names = list(agents[0].utility_vars)
+                weights_dict = {
+                    u: [agents[0].memory[t].weights[u] for t in range(min_iters)]
+                    for u in util_names
+                }
+                weights_df = pd.DataFrame(weights_dict)
+                weights_df.to_csv(f"{name}/avg_util_weights.csv", index=False)
+        except Exception:
+            pass
 
         if save:
             fig.savefig(f"{name}/post_training_visualization.png")
@@ -512,6 +532,22 @@ class TrainingEnvironment:
         plt.ylabel("Average Reward")
         plt.title(f"Average Reward Across {len(agents)} Agents")
         plt.legend(loc="best")
+        # Fixed axis limits for publication
+        plt.ylim(0, 5)
+        plt.xlim(0, len(mean) - 1 if len(mean) > 0 else 0)
+
+        # Save CSV for MC curve
+        try:
+            mc_df = pd.DataFrame(
+                {
+                    "iteration": x,
+                    "mean_reward": mean,
+                    "std_reward": std,
+                }
+            )
+            mc_df.to_csv(f"{name}/monte_carlo_rewards.csv", index=False)
+        except Exception:
+            pass
 
         if save:
             fig.savefig(f"{name}/monte_carlo.png")
@@ -599,6 +635,8 @@ class TrainingEnvironment:
 
         iterations = list(range(min_iters))
         fig = plt.figure(figsize=(12, 9))
+        # Accumulate CSV data
+        csv_rows = []
         for i, util in enumerate(utilities):
             color = lookup_color(util, i)
             subj_arr = (
@@ -635,6 +673,17 @@ class TrainingEnvironment:
                     linewidth=1,
                     label="_nolegend_",
                 )
+                # add to csv rows
+                for it, m, s in zip(iterations, subj_mean, subj_std):
+                    csv_rows.append(
+                        {
+                            "iteration": it,
+                            "utility": util,
+                            "type": "subjective",
+                            "mean": m,
+                            "std": s,
+                        }
+                    )
             if obj_arr is not None and obj_arr.size > 0:
                 obj_mean = obj_arr.mean(axis=0)
                 obj_std = obj_arr.std(axis=0)
@@ -666,11 +715,32 @@ class TrainingEnvironment:
                     linestyle="--",
                     label="_nolegend_",
                 )
+                for it, m, s in zip(iterations, obj_mean, obj_std):
+                    csv_rows.append(
+                        {
+                            "iteration": it,
+                            "utility": util,
+                            "type": "objective",
+                            "mean": m,
+                            "std": s,
+                        }
+                    )
 
         plt.xlabel("Iteration")
         plt.ylabel("Weighted Reward")
         plt.title("Subjective & Objective Weighted Rewards for First Agent")
         plt.legend()
+        # Fixed axis limits for publication
+        plt.ylim(0, 4)
+        plt.xlim(0, min_iters - 1 if min_iters > 0 else 0)
+
+        # Save CSV for weighted rewards
+        try:
+            if csv_rows:
+                wr_df = pd.DataFrame(csv_rows)
+                wr_df.to_csv(f"{name}/weighted_rewards.csv", index=False)
+        except Exception:
+            pass
 
         if save:
             fig.savefig(f"{name}/weighted_rewards.png")
@@ -686,7 +756,7 @@ class TrainingEnvironment:
 
         Parameters
         ----------
-        agents : list[CausalLearningAgent]
+        agents : list["CausalLearningAgent"]
             A list of causal learning agents. Only the first agent's u_hat_models are plotted.
         """
         if not agents:
@@ -704,6 +774,8 @@ class TrainingEnvironment:
         fig = plt.figure(figsize=(12, 9))
         # Aggregate across agents per model name
         model_names = list(agent.u_hat_models.keys())
+        # CSV accumulation
+        csv_rows = []
         for i, model_name in enumerate(model_names):
             # Collect losses for this model across agents
             per_agent_losses = []
@@ -742,6 +814,15 @@ class TrainingEnvironment:
                         linewidth=1,
                         label="_nolegend_",
                     )
+                for it, m, s in zip(x, mean, std):
+                    csv_rows.append(
+                        {
+                            "iteration": it,
+                            "model": model_name,
+                            "mean_loss": float(m),
+                            "std_loss": float(s),
+                        }
+                    )
             else:
                 print(
                     f"Model {model_name} does not have a loss history to plot across agents."
@@ -751,6 +832,17 @@ class TrainingEnvironment:
         plt.ylabel("Loss")
         plt.title("Loss History (mean ± 1 SD across agents) per u_hat_model")
         plt.legend(loc="best")
+        # Fixed axis limits for publication
+        plt.ylim(0, 1)
+
+        # Save CSV
+        try:
+            if csv_rows:
+                loss_df = pd.DataFrame(csv_rows)
+                loss_df.to_csv(f"{name}/u_hat_model_losses.csv", index=False)
+        except Exception:
+            pass
+
         if save:
             fig.savefig(f"{name}/u_hat_model_losses.png")
             plt.close(fig)
