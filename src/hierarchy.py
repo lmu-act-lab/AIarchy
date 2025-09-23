@@ -2,25 +2,43 @@ from src.cla import CausalLearningAgent as CLA
 from src.training_environment import TrainingEnvironment
 import copy
 
+
 class Hierarchy:
-    def __init__(self, agent_parents: dict[CLA, list[CLA]], pooling_vars: list[str], glue_vars: list[str], monte_carlo_samples: int = 100):
+    def __init__(
+        self,
+        agent_parents: dict[CLA, list[CLA]],
+        pooling_vars: list[str],
+        glue_vars: list[str],
+        monte_carlo_samples: int = 100,
+    ):
         """
         Initializes the hierarchy with a dictionary of agents and their parents.
 
         :param agent_parents: A dictionary where keys are parents and values are lists of children.
         """
         for pooling_var in pooling_vars:
-            if pooling_var not in agent_parents[next(iter(agent_parents))][0].utility_vars:
-                raise ValueError(f"Pooling variable {pooling_var} not found in utility variables of child agent.")
+            if (
+                pooling_var
+                not in agent_parents[next(iter(agent_parents))][0].utility_vars
+            ):
+                raise ValueError(
+                    f"Pooling variable {pooling_var} not found in utility variables of child agent."
+                )
         for glue_var in glue_vars:
             if glue_var not in next(iter(agent_parents)).reflective_vars:
-                raise ValueError(f"Glue variable {glue_var} not found in reflective variables of parent agent.")
+                raise ValueError(
+                    f"Glue variable {glue_var} not found in reflective variables of parent agent."
+                )
         self.parents = []
         self.children = []
         for parent, children in agent_parents.items():
-            self.parents.append(self.make_monte_carlo(parent, num_samples=monte_carlo_samples))
+            self.parents.append(
+                self.make_monte_carlo(parent, num_samples=monte_carlo_samples)
+            )
             for child in children:
-                self.children.append(self.make_monte_carlo(child, num_samples=monte_carlo_samples))
+                self.children.append(
+                    self.make_monte_carlo(child, num_samples=monte_carlo_samples)
+                )
         self.TE = TrainingEnvironment()
         self.monte_carlo_samples = monte_carlo_samples
         self.pooling_vars = pooling_vars
@@ -55,8 +73,11 @@ class Hierarchy:
             for i in range(self.monte_carlo_samples):
                 parent[i].lower_tier_pooled_reward = {}
                 for pooling_var in self.pooling_vars:
-                    parent[i].lower_tier_pooled_reward[pooling_var] = self.pooling_var_vals[pooling_var][i]
-
+                    parent[i].lower_tier_pooled_reward[pooling_var] = (
+                        self.pooling_var_vals[pooling_var][i]
+                    )
+                # Update u_hat models to include pooling variables as context
+                parent[i].update_u_hat_models_for_pooling()
 
     def glue_var_update(self):
         for glue_var in self.glue_vars:
@@ -85,6 +106,7 @@ class Hierarchy:
             for parents in self.parents:
                 self.TE.train(parent_iter, "SA", parents)
             self.glue_var_update()
+
 
 # TODO:
 # 2. Teacher network (can be simple)
