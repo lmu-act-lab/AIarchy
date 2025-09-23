@@ -123,12 +123,15 @@ class CausalLearningAgent:
         self.reward_noise = reward_noise
         self.cum_memory: pd.DataFrame
         self.u_hat_models: dict[str, CLANN | None] = {}
+        # Cache for cdn_query to avoid repeated inference on identical queries
+        self._cdn_cache: dict[
+            tuple[tuple[str, ...], tuple[tuple[str, int], ...]], DiscreteFactor
+        ] = {}
 
         for utility in self.utility_vars:
             network_inputs = list(
-                    set(self.structural_model.get_parents(utility))
-                    - set(self.hidden_vars)
-                )
+                set(self.structural_model.get_parents(utility)) - set(self.hidden_vars)
+            )
             if len(network_inputs) == 0:
                 self.u_hat_models[utility] = None
             else:
@@ -167,8 +170,8 @@ class CausalLearningAgent:
             "temperature": self.temperature,
             "downweigh_factor": self.downweigh_factor,
             "ema": self.ema,
-            "agent_weights" : self.weights,
-            "reward_noise" : reward_noise
+            "agent_weights": self.weights,
+            "reward_noise": reward_noise,
         }
         self.ema_history: list[dict[str, float]] = []
         self.parent_combinations = self.par_dict()
@@ -177,6 +180,34 @@ class CausalLearningAgent:
             tuple[BayesianNetwork, dict[str, int]], DiscreteFactor
         ] = {}
         self.lower_tier_pooled_reward = None
+
+    def update_u_hat_models_for_pooling(self) -> None:
+        """
+        Update u_hat models to include pooling variables as context when available.
+        This should be called after lower_tier_pooled_reward is set.
+        """
+        if (
+            not hasattr(self, "lower_tier_pooled_reward")
+            or not self.lower_tier_pooled_reward
+        ):
+            return
+
+        for utility in self.utility_vars:
+            if (
+                utility in self.lower_tier_pooled_reward
+                and utility not in self.hidden_vars
+            ):
+                # Recreate the model with pooling variable as input
+                network_inputs = list(
+                    set(self.structural_model.get_parents(utility))
+                    - set(self.hidden_vars)
+                )
+                network_inputs.append(utility)  # Add the pooling variable itself
+
+                self.u_hat_models[utility] = CLANN(
+                    network_inputs,
+                    [utility],
+                )
 
     def par_dict(self):
         """
@@ -275,7 +306,6 @@ class CausalLearningAgent:
         for normal_time_step in self.memory:
             print(normal_time_step)
             print("\n")
-
 
     def display_cpts(self) -> None:
         """
@@ -488,7 +518,7 @@ class CausalLearningAgent:
         dict[str, float]
             expected reward given sample & structure
         """
-        inference: CausalInference = CausalInference(self.sampling_model)
+        inference: CausalInference = self.inference
         rewards_queries: dict[str, list[str]] = {}
         reward_probs: dict[str, DiscreteFactor] = {}
         expected_rewards: dict[str, float] = Counter()
@@ -570,6 +600,14 @@ class CausalLearningAgent:
         DiscreteFactor
             Factor over the queried variables under the intervention.
         """
+        # Attempt to serve from cache
+        cache_key = (
+            tuple(sorted(query_vars)),
+            tuple(sorted(do_evidence.items())),
+        )
+        if cache_key in self._cdn_cache:
+            return self._cdn_cache[cache_key]
+
         shared_vars = [var for var in query_vars if var in do_evidence.keys()]
         if len(shared_vars) > 0:
             model_copy = self.sampling_model.copy()
@@ -580,6 +618,8 @@ class CausalLearningAgent:
             model_copy.do(nodes=shared_vars)
             inference = CausalInference(model_copy)
             query = inference.query(variables=query_vars, show_progress=False)
+            # Store in cache
+            self._cdn_cache[cache_key] = query
             return query
 
         updated_model = self.sampling_model.do(nodes=list(do_evidence.keys()))
@@ -587,6 +627,8 @@ class CausalLearningAgent:
         query = inference.query(
             variables=query_vars, evidence=do_evidence, show_progress=False
         )
+        # Store in cache
+        self._cdn_cache[cache_key] = query
         return query
 
     # @profile
@@ -630,7 +672,12 @@ class CausalLearningAgent:
         # Compute weighted rewards for each row
         def compute_weighted_rewards(row):
             sample_dict = row.to_dict()
-            rewards = self.reward_func(sample_dict, self.utility_edges, self.reward_noise, self.lower_tier_pooled_reward)
+            rewards = self.reward_func(
+                sample_dict,
+                self.utility_edges,
+                self.reward_noise,
+                self.lower_tier_pooled_reward,
+            )
             # Multiply each reward by its corresponding weight
             weighted_reward = {var: rewards[var] * weights[var] for var in weights}
             return pd.Series(weighted_reward)
@@ -762,21 +809,33 @@ class CausalLearningAgent:
             self.ema_history.append(copy.deepcopy(self.ema))
 
             # Step 1: update EMA and identify which utilities to downweigh
-            utilities_to_downweigh: set[str] = self._update_ema_and_collect_adjustments()
+            utilities_to_downweigh: set[str] = (
+                self._update_ema_and_collect_adjustments()
+            )
 
             # Step 2: pick a candidate variable to tweak
-            candidate_var: str = random.choice(list(utilities_to_downweigh | self.reflective_vars))
+            candidate_var: str = random.choice(
+                list(utilities_to_downweigh | self.reflective_vars)
+            )
 
             # Step 3: simulate current policy and train u-hat models
-            normal_time_step: TimeStep = self.time_step(self.fixed_assignment, self.weights, self.sample_num)
+            normal_time_step: TimeStep = self.time_step(
+                self.fixed_assignment, self.weights, self.sample_num
+            )
             self._train_u_hat_models(normal_time_step)
 
             # Step 4: apply either a weight change or a reflective intervention
             if candidate_var in utilities_to_downweigh:
                 self._maybe_apply_weight_adjustment(candidate_var, normal_time_step)
             else:
-                chosen_value, interventional_reward = self._evaluate_reflective_assignment(candidate_var, normal_time_step)
-                delta: float = interventional_reward - sum(normal_time_step.average_reward.values())
+                chosen_value, interventional_reward = (
+                    self._evaluate_reflective_assignment(
+                        candidate_var, normal_time_step
+                    )
+                )
+                delta: float = interventional_reward - sum(
+                    normal_time_step.average_reward.values()
+                )
                 if self._accept_metropolis(delta):
                     adjusted_cpt = self.nudge_cpt_new(
                         self.sampling_model.get_cpds(candidate_var),
@@ -784,8 +843,14 @@ class CausalLearningAgent:
                         self.cpt_increase_factor,
                         interventional_reward,
                     )
-                    self.sampling_model.remove_cpds(self.sampling_model.get_cpds(candidate_var))
+                    self.sampling_model.remove_cpds(
+                        self.sampling_model.get_cpds(candidate_var)
+                    )
                     self.sampling_model.add_cpds(adjusted_cpt)
+                    # Refresh persistent inference after CPD change
+                    self.inference = CausalInference(self.sampling_model)
+                    # Invalidate cached interventional queries due to model change
+                    self._cdn_cache.clear()
 
             # Step 5: record and cool
             self.memory.append(normal_time_step)
@@ -824,6 +889,17 @@ class CausalLearningAgent:
                 columns=[col for col in self.hidden_vars]
             )
             numeric = hidden_removed.apply(pd.to_numeric)
+
+            # Add pooling variables as context if they pertain to this utility
+            # BUT only if they're not explicitly hidden
+            if (
+                hasattr(self, "lower_tier_pooled_reward")
+                and self.lower_tier_pooled_reward
+            ):
+                for pooling_var, pooled_value in self.lower_tier_pooled_reward.items():
+                    if pooling_var == util_name and pooling_var not in self.hidden_vars:
+                        numeric[pooling_var] = pooled_value
+
             model.train(numeric, epochs=self.u_hat_epochs)
 
     def _maybe_apply_weight_adjustment(
@@ -853,7 +929,8 @@ class CausalLearningAgent:
         Metropolis acceptance criterion used by simulated annealing.
         """
         return bool(
-            delta >= 0 or random.random() <= np.exp((-1 * np.tanh(delta)) / self.temperature)
+            delta >= 0
+            or random.random() <= np.exp((-1 * np.tanh(delta)) / self.temperature)
         )
 
     def _evaluate_reflective_assignment(
@@ -879,23 +956,74 @@ class CausalLearningAgent:
         """
         per_value_rewards: list[dict[str, float]] = []
 
+        # Precompute predicted utility for all parent combinations per utility once
+        predicted_by_utility: dict[str, np.ndarray] = {}
+        parents_by_utility: dict[str, list[str]] = {}
+        combos_by_utility: dict[str, list[dict[str, int]]] = {}
+        for utility in self.utility_vars:
+            if self.u_hat_models[utility] is None:
+                continue
+            combos = self.parent_combinations[utility]
+            # Filter out the reflective var from combos for interventional queries
+            filtered_combos = [
+                {k: v for k, v in combo.items() if k != reflective_var}
+                for combo in combos
+            ]
+            combos_by_utility[utility] = filtered_combos
+            if len(combos) == 0:
+                predicted_by_utility[utility] = np.zeros((0,), dtype=float)
+                parents_by_utility[utility] = []
+            else:
+                df = pd.DataFrame(combos)
+                preds = self.u_hat_models[utility].predict(df)[:, 0]
+                predicted_by_utility[utility] = preds
+                # Parent names excluding the reflective var (now in evidence)
+                parents_by_utility[utility] = [
+                    name for name in combos[0].keys() if name != reflective_var
+                ]
+
         for candidate_value in range(self.card_dict[reflective_var]):
             utility_reward_by_name: dict[str, float] = Counter()
+
+            # Build a single interventional model for this candidate value
+            intervened_model = self.sampling_model.do(nodes=[reflective_var])
+            inference = CausalInference(intervened_model)
+
+            # Group utilities by identical parent sets to share a single query
+            group_to_utils: dict[tuple[str, ...], list[str]] = {}
             for utility in self.utility_vars:
                 if self.u_hat_models[utility] is None:
                     utility_reward_by_name[utility] = 0.0
                     continue
-                for parent_dict in self.parent_combinations[utility]:
-                    parent_prob = self.cdn_query(
-                        [key for key in parent_dict.keys()],
-                        {reflective_var: candidate_value},
-                    ).get_value(
-                        **{key: value for key, value in parent_dict.items()}
+                parent_names = parents_by_utility[utility]
+                group_key = tuple(parent_names)
+                group_to_utils.setdefault(group_key, []).append(utility)
+
+            for parent_group, utils in group_to_utils.items():
+                if len(parent_group) == 0:
+                    for utility in utils:
+                        utility_reward_by_name[utility] = float(
+                            predicted_by_utility[utility].sum()
+                        )
+                    continue
+                # One query for the whole group
+                factor = inference.query(
+                    variables=list(parent_group),
+                    evidence={reflective_var: candidate_value},
+                    show_progress=False,
+                )
+                # Extract probabilities for each assignment once
+                # Build a lookup: assignment dict -> prob via get_value
+                for utility in utils:
+                    probs = [
+                        factor.get_value(**assignment)
+                        for assignment in combos_by_utility[utility]
+                    ]
+                    probs_arr = np.asarray(probs, dtype=float)
+                    preds_arr = predicted_by_utility[utility]
+                    utility_reward_by_name[utility] = float(
+                        np.dot(probs_arr, preds_arr)
                     )
-                    predicted_utility = self.u_hat_models[utility].predict(
-                        pd.DataFrame([parent_dict])
-                    )[0, 0]
-                    utility_reward_by_name[utility] += parent_prob * predicted_utility
             per_value_rewards.append(utility_reward_by_name)
 
         # Apply current objective weights
