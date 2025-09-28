@@ -42,17 +42,17 @@ class TrainingEnvironment:
         """
         Trains n agents for a specified number of monte carlo repetitions using a specified style.
         """
-        print("=== Training Begin ===")
+        # print("=== Training Begin ===")
         start_time = time.time()
         for agent in agents:
-            print(f"training agent number {agents.index(agent) + 1}")
+            # print(f"training agent number {agents.index(agent) + 1}")
             match style:
                 case "SA":
                     agent.train_SA(mc_rep)
                 case "ME":
                     agent.train_ME(mc_rep)
         end_time = time.time()
-        print(f"=== Training End (Elapsed: {end_time - start_time:.2f}s) ===")
+        # print(f"=== Training End (Elapsed: {end_time - start_time:.2f}s) ===")
         return agents
 
     def pre_training_visualization(self, agent, name="", save=False) -> None:
