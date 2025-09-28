@@ -16,23 +16,21 @@ def make_teacher() -> CausalLearningAgent:
         The teacher agent instance.
     """
     sampling_edges = [
-        ("class_composition", "curriculum_complexity"),
-        # Note: utilities ('grades', 'teacher_regulation') are NOT part of the sampling graph.
-        # They live only in the structural (utility) graph.
+        ("placement_test_proficiency", "curriculum_complexity"),
     ]
 
     utility_edges = [
-        ("grade_leniency", "class_performance"),
+        ("grade_leniency", "internship_placement_reports"),
         ("curriculum_complexity", "class_performance"),
     ]
 
     cpts = [
-        TabularCPD("class_composition", 2, [[0.5], [0.5]]),
+        TabularCPD("placement_test_proficiency", 2, [[0.5], [0.5]]),
         TabularCPD(
             variable="curriculum_complexity",
             variable_card=3,
             values=[[0.7, 0.1], [0.2, 0.2], [0.1, 0.7]],
-            evidence=["class_composition"],
+            evidence=["placement_test_proficiency"],
             evidence_card=[2],
         ),
         TabularCPD(variable="grade_leniency", variable_card=2, values=[[0.5], [0.5]]),
@@ -42,12 +40,13 @@ def make_teacher() -> CausalLearningAgent:
         sampling_edges=sampling_edges,
         utility_edges=utility_edges,
         cpts=cpts,
-        utility_vars={"class_performance"},
+        utility_vars={"class_performance", "internship_placement_reports"},
         reflective_vars={"grade_leniency", "curriculum_complexity"},
-        chance_vars={"class_composition"},
-        glue_vars={"grade_leniency"},
+        chance_vars={"placement_test_proficiency"},
+        glue_vars={"grade_leniency", "curriculum_complexity"},
         reward_func=_teacher_reward,
-        fixed_evidence={"class_composition": 0},
+        fixed_evidence={"placement_test_proficiency": 0},
+        cpt_increase_factor=0.05,
     )
     return teacher
 
@@ -115,4 +114,6 @@ def _teacher_reward(
             if lower_tier_pooled_reward:
                 for util_name, pooled_val in lower_tier_pooled_reward.items():
                     rewards[util] += pooled_val
+        if util == "internship_placement_reports":
+            rewards[util] -= sample.get("grade_leniency", 0)
     return rewards
