@@ -375,164 +375,164 @@ confounding_struct_hidden: CausalLearningAgent = CausalLearningAgent(
     hidden_vars=["chance_1"]
 )
 
-Low_SES = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 0},
-)
+# Low_SES = CausalLearningAgent(
+#     sampling_edges=[
+#         ("SES", "Tutoring"),
+#         ("SES", "ECs"),
+#         ("SES", "Time studying"),
+#         ("Motivation", "Time studying"),
+#         ("SES", "Exercise"),
+#         ("ECs", "Time studying"),
+#         ("Time studying", "Sleep"),
+#     ],
+#     utility_edges=[
+#         ("Time studying", "grades"),
+#         ("Tutoring", "grades"),
+#         ("ECs", "social"),
+#         ("Sleep", "health"),
+#         ("Exercise", "health"),
+#     ],
+#     cpts=list_of_cpts,
+#     utility_vars={"grades", "social", "health"},
+#     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+#     chance_vars={"Tutoring", "Motivation", "SES"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={"SES": 0},
+# )
 
-Mid_SES = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 1},
-)
+# Mid_SES = CausalLearningAgent(
+#     sampling_edges=[
+#         ("SES", "Tutoring"),
+#         ("SES", "ECs"),
+#         ("SES", "Time studying"),
+#         ("Motivation", "Time studying"),
+#         ("SES", "Exercise"),
+#         ("ECs", "Time studying"),
+#         ("Time studying", "Sleep"),
+#     ],
+#     utility_edges=[
+#         ("Time studying", "grades"),
+#         ("Tutoring", "grades"),
+#         ("ECs", "social"),
+#         ("Sleep", "health"),
+#         ("Exercise", "health"),
+#     ],
+#     cpts=list_of_cpts,
+#     utility_vars={"grades", "social", "health"},
+#     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+#     chance_vars={"Tutoring", "Motivation", "SES"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={"SES": 1},
+# )
 
-High_SES = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 2},
-)
+# High_SES = CausalLearningAgent(
+#     sampling_edges=[
+#         ("SES", "Tutoring"),
+#         ("SES", "ECs"),
+#         ("SES", "Time studying"),
+#         ("Motivation", "Time studying"),
+#         ("SES", "Exercise"),
+#         ("ECs", "Time studying"),
+#         ("Time studying", "Sleep"),
+#     ],
+#     utility_edges=[
+#         ("Time studying", "grades"),
+#         ("Tutoring", "grades"),
+#         ("ECs", "social"),
+#         ("Sleep", "health"),
+#         ("Exercise", "health"),
+#     ],
+#     cpts=list_of_cpts,
+#     utility_vars={"grades", "social", "health"},
+#     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+#     chance_vars={"Tutoring", "Motivation", "SES"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={"SES": 2},
+# )
 
-academic_student = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 1},
-    weights={"grades": 0.5, "health": 0.25, "social": 0.25},
-)
+# academic_student = CausalLearningAgent(
+#     sampling_edges=[
+#         ("SES", "Tutoring"),
+#         ("SES", "ECs"),
+#         ("SES", "Time studying"),
+#         ("Motivation", "Time studying"),
+#         ("SES", "Exercise"),
+#         ("ECs", "Time studying"),
+#         ("Time studying", "Sleep"),
+#     ],
+#     utility_edges=[
+#         ("Time studying", "grades"),
+#         ("Tutoring", "grades"),
+#         ("ECs", "social"),
+#         ("Sleep", "health"),
+#         ("Exercise", "health"),
+#     ],
+#     cpts=list_of_cpts,
+#     utility_vars={"grades", "social", "health"},
+#     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+#     chance_vars={"Tutoring", "Motivation", "SES"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={"SES": 1},
+#     weights={"grades": 0.5, "health": 0.25, "social": 0.25},
+# )
 
-healthy_student = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 1},
-    weights={"grades": 0.25, "health": 0.5, "social": 0.25},
-)
+# healthy_student = CausalLearningAgent(
+#     sampling_edges=[
+#         ("SES", "Tutoring"),
+#         ("SES", "ECs"),
+#         ("SES", "Time studying"),
+#         ("Motivation", "Time studying"),
+#         ("SES", "Exercise"),
+#         ("ECs", "Time studying"),
+#         ("Time studying", "Sleep"),
+#     ],
+#     utility_edges=[
+#         ("Time studying", "grades"),
+#         ("Tutoring", "grades"),
+#         ("ECs", "social"),
+#         ("Sleep", "health"),
+#         ("Exercise", "health"),
+#     ],
+#     cpts=list_of_cpts,
+#     utility_vars={"grades", "social", "health"},
+#     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+#     chance_vars={"Tutoring", "Motivation", "SES"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={"SES": 1},
+#     weights={"grades": 0.25, "health": 0.5, "social": 0.25},
+# )
 
-social_student = CausalLearningAgent(
-    sampling_edges=[
-        ("SES", "Tutoring"),
-        ("SES", "ECs"),
-        ("SES", "Time studying"),
-        ("Motivation", "Time studying"),
-        ("SES", "Exercise"),
-        ("ECs", "Time studying"),
-        ("Time studying", "Sleep"),
-    ],
-    utility_edges=[
-        ("Time studying", "grades"),
-        ("Tutoring", "grades"),
-        ("ECs", "social"),
-        ("Sleep", "health"),
-        ("Exercise", "health"),
-    ],
-    cpts=list_of_cpts,
-    utility_vars={"grades", "social", "health"},
-    reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
-    chance_vars={"Tutoring", "Motivation", "SES"},
-    glue_vars=set(),
-    reward_func=testing_environment.default_reward,
-    fixed_evidence={"SES": 1},
-    weights={"grades": 0.25, "health": 0.25, "social": 0.5},
-)
+# social_student = CausalLearningAgent(
+#     sampling_edges=[
+#         ("SES", "Tutoring"),
+#         ("SES", "ECs"),
+#         ("SES", "Time studying"),
+#         ("Motivation", "Time studying"),
+#         ("SES", "Exercise"),
+#         ("ECs", "Time studying"),
+#         ("Time studying", "Sleep"),
+#     ],
+#     utility_edges=[
+#         ("Time studying", "grades"),
+#         ("Tutoring", "grades"),
+#         ("ECs", "social"),
+#         ("Sleep", "health"),
+#         ("Exercise", "health"),
+#     ],
+#     cpts=list_of_cpts,
+#     utility_vars={"grades", "social", "health"},
+#     reflective_vars={"Time studying", "Exercise", "Sleep", "ECs"},
+#     chance_vars={"Tutoring", "Motivation", "SES"},
+#     glue_vars=set(),
+#     reward_func=testing_environment.default_reward,
+#     fixed_evidence={"SES": 1},
+#     weights={"grades": 0.25, "health": 0.25, "social": 0.5},
+# )
 
 sampling_edges = [
     ("SES", "Tutoring"), ("SES", "ECs"), ("SES", "Time studying"),
@@ -660,88 +660,6 @@ mediation_hidden = CausalLearningAgent(
     reward_func=testing_environment.default_reward,
 )
 
-
-base_structs = {
-    "confound_obs": confound_obs,
-    "confound_hidden": confound_hidden,
-    "fork": fork_struct,
-    "mediation_obs": mediation_obs,
-    "mediation_hidden": mediation_hidden,
-    "downweigh_struct": downweigh_struct,
-}
-
-students = {
-    "Amy":    make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
-    "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
-    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0),
-    "Dana":   make_student(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0),
-    "Ethan":  make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0),
-    "Farah":  make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0),
-    "Grace":  make_student(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0),
-    "Hiro":   make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0),
-    "Isla":   make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0),
-    "Jonas":  make_student(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0),
-    "Kiara":  make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0),
-    "Leo":    make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0),
-    "Mei":    make_student(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0),
-    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0),
-    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0),
-}
-
-students_with_noise = {
-    "Amy":    make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0.2),
-    "Ben":    make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0.2),
-    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0.2),
-    "Dana":   make_student(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0.2),
-    "Ethan":  make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0.2),
-    "Farah":  make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0.2),
-    "Grace":  make_student(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0.2),
-    "Hiro":   make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0.2),
-    "Isla":   make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0.2),
-    "Jonas":  make_student(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0.2),
-    "Kiara":  make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0.2),
-    "Leo":    make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0.2),
-    "Mei":    make_student(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0.2),
-    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0.2),
-    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0.2),
-}
-
-param_variants: dict[str, CausalLearningAgent] = {}
-
-for name, agent in base_structs.items():
-    # 1. Reward‐noise variant
-    a_noise = copy.deepcopy(agent)
-    a_noise.reward_noise = 0.2
-    param_variants[f"{name}_noise02"] = a_noise
-
-    # 2. High‐sample variant
-    a_samples = copy.deepcopy(agent)
-    a_samples.sample_num = 32
-    param_variants[f"{name}_samples32"] = a_samples
-
-    # 3. Fast‐adaptation variant
-    a_fast = copy.deepcopy(agent)
-    a_fast.downweigh_alpha = 0.1
-    a_fast.cpt_increase_factor = 0.05
-    param_variants[f"{name}_fastAdapt"] = a_fast
-
-    # 4. High‐exploration variant
-    a_explore = copy.deepcopy(agent)
-    a_explore.temperature = 5.0
-    a_explore.cooling_factor = 0.999
-    param_variants[f"{name}_highExplore"] = a_explore
-
-# Merge base + parameter variants
-all_structs = {**base_structs, **param_variants}
-
-from src.exactq_agent import ExactQComparisonAgent
-#  --- EXACT Q SECTION --- #
-actions = [("Time studying", 0), ("Time studying", 1), ("Time studying", 2), ("Exercise", 0), ("Exercise", 1), ("Sleep", 0), ("Sleep", 1), ("Sleep", 2), ("ECs", 0), ("ECs", 1)]
-
-actions = [(action, 0.01) for action in actions[::-1]]
-
-exact_q_agents = [copy.deepcopy(ExactQComparisonAgent(actions = actions, gamma = 0.1, alpha = 0.01, cla_agent=copy.deepcopy(students["Ben"]))) for i in range(100)]
-
 # for exact in agents:
 #     print(f"agent: {agents.index(exact)}")
 #     exact.train(2000)
@@ -800,6 +718,43 @@ grade_leniency_cpd = TabularCPD(
     variable_card=2,
     values=[[0.5], [0.5]]
 )
+curriculum_complexity_cpd = TabularCPD(
+    variable="curriculum_complexity",
+    variable_card=3,
+    values=[[0.7, 0.1], [0.2, 0.2], [0.1, 0.7]],
+    evidence=["placement_test_proficiency"],
+    evidence_card=[2],
+)
+placement_test_proficiency_cpd = TabularCPD(
+    variable="placement_test_proficiency",
+    variable_card=2,
+    values=[[0.5], [0.5]]
+)
+
+motivation_cpd = TabularCPD(
+    variable="Motivation", 
+    variable_card=2, 
+    values=[[0.2, 0.4, 0.6], [0.8, 0.6, 0.4]], 
+    evidence=["curriculum_complexity"], 
+    evidence_card=[3]
+)
+
+
+hierarchy_sampling_edges = [
+    ("SES", "Tutoring"), ("SES", "ECs"), ("SES", "Time studying"),
+    ("Motivation", "Time studying"), ("SES", "Exercise"),
+    ("ECs", "Time studying"), ("Time studying", "Sleep"), ("curriculum_complexity", "Motivation"), ("placement_test_proficiency", "curriculum_complexity")
+]
+
+hierarchy_new_utility_edges = [
+    ("Time studying", "grades"), ("Tutoring", "grades"),
+    ("ECs", "social"), ("Sleep", "health"), ("Exercise", "health"), ("grade_leniency", "grades")
+]
+
+hierarchy_reflective_vars = {"Time studying", "Exercise", "Sleep", "ECs"}
+hierarchy_new_chance_vars     = {"Tutoring", "Motivation", "SES", "grade_leniency"}
+hierarchy_new_glue_vars   = {"grade_leniency", "curriculum_complexity"}
+hierarchy_utility_vars    = {"grades", "social", "health"}
 
 sampling_edges = [
     ("SES", "Tutoring"), ("SES", "ECs"), ("SES", "Time studying"),
@@ -809,16 +764,20 @@ sampling_edges = [
 
 new_utility_edges = [
     ("Time studying", "grades"), ("Tutoring", "grades"),
-    ("ECs", "social"), ("Sleep", "health"), ("Exercise", "health"), ("grade_leniency", "grades")
+    ("ECs", "social"), ("Sleep", "health"), ("Exercise", "health")
 ]
 
 reflective_vars = {"Time studying", "Exercise", "Sleep", "ECs"}
-new_chance_vars     = {"Tutoring", "Motivation", "SES", "grade_leniency"}
-new_glue_vars   = {"grade_leniency"}
+new_chance_vars     = {"Tutoring", "Motivation", "SES"}
 utility_vars    = {"grades", "social", "health"}
 
-list_of_cpts.append(grade_leniency_cpd.copy())
-
+import copy
+hierarchy_list_of_cpts = copy.deepcopy(list_of_cpts)
+hierarchy_list_of_cpts.append(grade_leniency_cpd.copy())
+hierarchy_list_of_cpts.append(curriculum_complexity_cpd.copy())
+hierarchy_list_of_cpts.append(placement_test_proficiency_cpd.copy())
+hierarchy_list_of_cpts.remove(list_of_cpts[1])
+hierarchy_list_of_cpts.append(motivation_cpd.copy())
 def make_student(ses_value, weights, T, cool, frustr, reward_noise):
     return CausalLearningAgent(
         sampling_edges=sampling_edges,
@@ -827,7 +786,7 @@ def make_student(ses_value, weights, T, cool, frustr, reward_noise):
         utility_vars=utility_vars,
         reflective_vars=reflective_vars,
         chance_vars=new_chance_vars,
-        glue_vars=new_glue_vars, 
+        glue_vars=set(), 
         reward_func=testing_environment.default_reward,
         fixed_evidence={"SES": ses_value},
         weights=dict(zip(("grades","social","health"), weights)),
@@ -836,6 +795,24 @@ def make_student(ses_value, weights, T, cool, frustr, reward_noise):
         frustration_threshold=frustr,
         reward_noise=reward_noise
     )
+
+def make_student_hierarchy(ses_value, weights, T, cool, frustr, reward_noise):
+    return CausalLearningAgent(
+    sampling_edges=hierarchy_sampling_edges,
+    utility_edges=hierarchy_new_utility_edges,
+    cpts=hierarchy_list_of_cpts,
+    utility_vars=hierarchy_utility_vars,
+    reflective_vars=hierarchy_reflective_vars,
+    chance_vars=hierarchy_new_chance_vars,
+    glue_vars=hierarchy_new_glue_vars, 
+    reward_func=testing_environment.default_reward,
+    fixed_evidence={"SES": ses_value, "placement_test_proficiency": 0},
+    weights=dict(zip(("grades","social","health"), weights)),
+    temperature=T,
+    cooling_factor=cool,
+    frustration_threshold=frustr,
+    reward_noise=reward_noise
+)
 
 # 2) Create a teacher agent sharing the glue var 'grade_leniency'
 teacher_agent = CausalLearningAgent(
@@ -867,3 +844,124 @@ teacher_agent = CausalLearningAgent(
     fixed_evidence={}
 )
 
+
+base_structs = {
+    "confound_obs": confound_obs,
+    "confound_hidden": confound_hidden,
+    "fork": fork_struct,
+    "mediation_obs": mediation_obs,
+    "mediation_hidden": mediation_hidden,
+    "downweigh_struct": downweigh_struct,
+}
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+hierarchy_students = {
+    "Amy": make_student_hierarchy(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
+    "Ben": make_student_hierarchy(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
+    "Carlos": make_student_hierarchy(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0),
+    "Dana": make_student_hierarchy(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0),
+    "Ethan": make_student_hierarchy(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0),
+    "Farah": make_student_hierarchy(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0),
+    "Grace": make_student_hierarchy(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0),
+    "Hiro": make_student_hierarchy(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0),
+    "Isla": make_student_hierarchy(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0),
+    "Jonas": make_student_hierarchy(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0),
+    "Kiara": make_student_hierarchy(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0),
+    "Leo": make_student_hierarchy(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0),
+    "Mei": make_student_hierarchy(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0),
+    "Nikhil": make_student_hierarchy(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0),
+    "Olivia": make_student_hierarchy(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0),
+}
+
+students = {
+    "Amy": make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
+    "Ben": make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
+    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0),
+    "Dana": make_student(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0),
+    "Ethan": make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0),
+    "Farah": make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0),
+    "Grace": make_student(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0),
+    "Hiro": make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0),
+    "Isla": make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0),
+    "Jonas": make_student(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0),
+    "Kiara": make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0),
+    "Leo": make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0),
+    "Mei": make_student(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0),
+    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0),
+    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0),
+}
+
+students_with_noise = {
+    "Amy": make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0.2),
+    "Ben": make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0.2),
+    "Carlos": make_student(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0.2),
+    "Dana": make_student(1, (0.25, 0.25, 0.50), 0.50, 0.990, 0.28, 0.2),
+    "Ethan": make_student(2, (0.70, 0.15, 0.15), 0.25, 0.940, 0.22, 0.2),
+    "Farah": make_student(0, (0.40, 0.25, 0.35), 3.00, 0.993, 0.12, 0.2),
+    "Grace": make_student(1, (0.33, 0.33, 0.34), 1.00, 0.985, 0.20, 0.2),
+    "Hiro": make_student(2, (0.55, 0.10, 0.35), 0.50, 0.970, 0.30, 0.2),
+    "Isla": make_student(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0.2),
+    "Jonas": make_student(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0.2),
+    "Kiara": make_student(2, (0.48, 0.40, 0.12), 2.00, 0.990, 0.27, 0.2),
+    "Leo": make_student(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0.2),
+    "Mei": make_student(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0.2),
+    "Nikhil": make_student(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0.2),
+    "Olivia": make_student(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0.2),
+}
+
+param_variants: dict[str, CausalLearningAgent] = {}
+
+for name, agent in base_structs.items():
+    # 1. Reward‐noise variant
+    a_noise = copy.deepcopy(agent)
+    a_noise.reward_noise = 0.2
+    param_variants[f"{name}_noise02"] = a_noise
+
+    # 2. High‐sample variant
+    a_samples = copy.deepcopy(agent)
+    a_samples.sample_num = 32
+    param_variants[f"{name}_samples32"] = a_samples
+
+    # 3. Fast‐adaptation variant
+    a_fast = copy.deepcopy(agent)
+    a_fast.downweigh_alpha = 0.1
+    a_fast.cpt_increase_factor = 0.05
+    param_variants[f"{name}_fastAdapt"] = a_fast
+
+    # 4. High‐exploration variant
+    a_explore = copy.deepcopy(agent)
+    a_explore.temperature = 5.0
+    a_explore.cooling_factor = 0.999
+    param_variants[f"{name}_highExplore"] = a_explore
+
+# Merge base + parameter variants
+all_structs = {**base_structs, **param_variants}
+
+from src.exactq_agent import ExactQComparisonAgent
+
+#  --- EXACT Q SECTION --- #
+actions = [
+    ("Time studying", 0),
+    ("Time studying", 1),
+    ("Time studying", 2),
+    ("Exercise", 0),
+    ("Exercise", 1),
+    ("Sleep", 0),
+    ("Sleep", 1),
+    ("Sleep", 2),
+    ("ECs", 0),
+    ("ECs", 1),
+]
+
+actions = [(action, 0.01) for action in actions[::-1]]
+
+exact_q_agents = [
+    copy.deepcopy(
+        ExactQComparisonAgent(
+            actions=actions,
+            gamma=0.1,
+            alpha=0.01,
+            cla_agent=copy.deepcopy(students["Ben"]),
+        )
+    )
+    for i in range(100)
+]
