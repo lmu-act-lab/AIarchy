@@ -69,11 +69,15 @@ def main():
     
     students_to_train = {
         "Amy": students["Amy"],
-        "Leo": students["Leo"]
+        "Leo": students["Leo"],
+        "Isla": students["Isla"],
+        "Mei": students["Mei"],
+        "Jonas": students["Jonas"],
+        "Nikhil": students["Nikhil"]
     }
     
     for name, agent in students_to_train.items():
-        run_simulation(agent, name, iterations=300, monte_carlo_samples=10, show_params=True)
+        run_simulation(agent, name, iterations=4000, monte_carlo_samples=100, show_params=True)
     
     print("\n" + "=" * 50)
     print("All simulations completed successfully!")
