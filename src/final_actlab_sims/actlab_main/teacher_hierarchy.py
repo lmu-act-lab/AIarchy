@@ -8,6 +8,11 @@ from src.teacher import build_classroom_hierarchy
 from src.final_actlab_sims import models as M
 from src.training_environment import TrainingEnvironment
 
+from src.final_actlab_sims.set_seed import set_seed
+
+# Set up environment
+set_seed()
+
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 
