@@ -854,7 +854,7 @@ base_structs = {
     "downweigh_struct": downweigh_struct,
 }
 
-hierarchy_students = {
+hierarchy_students_old = {
     "Amy": make_student_hierarchy(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
     "Ben": make_student_hierarchy(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
     "Carlos": make_student_hierarchy(0, (0.30, 0.55, 0.15), 2.00, 0.970, 0.10, 0),
@@ -870,6 +870,15 @@ hierarchy_students = {
     "Mei": make_student_hierarchy(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0),
     "Nikhil": make_student_hierarchy(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0),
     "Olivia": make_student_hierarchy(1, (0.60, 0.10, 0.30), 0.50, 0.930, 0.25, 0),
+}
+
+hierarchy_students = {
+    "Nikhil": make_student_hierarchy(2, (0.37, 0.43, 0.20), 1.00, 0.980, 0.17, 0),
+    "Leo": make_student_hierarchy(0, (0.28, 0.22, 0.50), 0.10, 0.950, 0.19, 0),
+    "Amy": make_student_hierarchy(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
+    "Isla": make_student_hierarchy(0, (0.35, 0.50, 0.15), 3.00, 0.998, 0.18, 0),
+    "Mei": make_student_hierarchy(1, (0.50, 0.25, 0.25), 3.00, 0.996, 0.11, 0),
+    "Jonas": make_student_hierarchy(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0),
 }
 
 students = {
