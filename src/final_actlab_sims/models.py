@@ -881,6 +881,8 @@ hierarchy_students = {
     "Jonas": make_student_hierarchy(1, (0.20, 0.30, 0.50), 0.25, 0.920, 0.08, 0),
 }
 
+#make_student(ses_value, weights(grades, social, health), T, cool, frustr, reward_noise)
+
 students = {
     "Amy": make_student(2, (0.60, 0.20, 0.20), 3.00, 0.995, 0.30, 0),
     "Ben": make_student(1, (0.45, 0.35, 0.20), 1.00, 0.980, 0.20, 0),
