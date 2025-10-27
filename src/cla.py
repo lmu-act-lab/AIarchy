@@ -135,10 +135,9 @@ class CausalLearningAgent:
         ] = {}
 
         for utility in self.utility_vars:
-            network_inputs = list(
-                    set(self.structural_model.get_parents(utility))
-                    - set(self.hidden_vars)
-                )
+            # Use sorted list to ensure deterministic ordering that matches par_dict()
+            parents = sorted(self.structural_model.get_parents(utility))
+            network_inputs = [p for p in parents if p not in self.hidden_vars]
             if len(network_inputs) == 0:
                 self.u_hat_models[utility] = None
             else:
@@ -228,13 +227,12 @@ class CausalLearningAgent:
         """
         utility_to_parent_combos = {}
         for utility in self.utility_vars:
+            # Get parents in sorted order to ensure deterministic ordering
+            parents = sorted(self.structural_model.get_parents(utility))
             # Get all possible parent combinations for the utility
             parent_combinations = list(
                 product(
-                    *[
-                        range(self.card_dict[parent])
-                        for parent in self.structural_model.get_parents(utility)
-                    ]
+                    *[range(self.card_dict[parent]) for parent in parents]
                 )
             )
             all_combos = []
@@ -243,7 +241,7 @@ class CausalLearningAgent:
                 parent_dict = {
                     parent: value
                     for parent, value in zip(
-                        self.structural_model.get_parents(utility),
+                        parents,
                         parent_values,
                         strict=True,
                     )
@@ -881,24 +879,34 @@ class CausalLearningAgent:
     def _train_u_hat_models(self, normal_time_step: TimeStep) -> None:
         """
         Train per-utility predictive models on the latest simulated samples.
+        Optimized to avoid repeated DataFrame operations.
         """
+        # Preprocess data once for all models
+        hidden_cols_to_drop = [col for col in self.hidden_vars if col in normal_time_step.memory.columns]
+        if hidden_cols_to_drop:
+            base_data = normal_time_step.memory.drop(columns=hidden_cols_to_drop)
+        else:
+            base_data = normal_time_step.memory
+        
+        # Data should already be numeric from simulation, but ensure it if needed
+        # Skip apply(pd.to_numeric) as it's expensive and data is already numeric from simulate()
+        
         for util_name, model in self.u_hat_models.items():
             if model is None:
                 continue
-            hidden_removed = normal_time_step.memory.drop(
-                columns=[col for col in self.hidden_vars]
-            )
-            numeric = hidden_removed.apply(pd.to_numeric)
-
-            # Add pooling variables as context if they pertain to this utility
-            # BUT only if they're not explicitly hidden
+            
+            # Use base data and only modify if pooling is needed
             if (
                 hasattr(self, "lower_tier_pooled_reward")
                 and self.lower_tier_pooled_reward
+                and util_name in self.lower_tier_pooled_reward
+                and util_name not in self.hidden_vars
             ):
-                for pooling_var, pooled_value in self.lower_tier_pooled_reward.items():
-                    if pooling_var == util_name and pooling_var not in self.hidden_vars:
-                        numeric[pooling_var] = pooled_value
+                # Create a copy only when needed
+                numeric = base_data.copy()
+                numeric[util_name] = self.lower_tier_pooled_reward[util_name]
+            else:
+                numeric = base_data
 
             model.train(numeric, epochs=self.u_hat_epochs)
 
@@ -940,29 +948,58 @@ class CausalLearningAgent:
         (a) the probability of parents under a do-intervention and (b) the
         predicted utility from the u-hat model. Returns the best assignment and
         its total weighted reward (post-weights).
+        
+        Optimized to batch neural network predictions.
         """
         per_value_rewards: list[dict[str, float]] = []
+        num_candidate_values = self.card_dict[reflective_var]
 
-        for candidate_value in range(self.card_dict[reflective_var]):
+        # Pre-compute all CDN queries and batch predictions per utility
+        for candidate_value in range(num_candidate_values):
             utility_reward_by_name: dict[str, float] = Counter()
+            
             for utility in self.utility_vars:
                 if self.u_hat_models[utility] is None:
                     utility_reward_by_name[utility] = 0.0
                     continue
-                for parent_dict in self.parent_combinations[utility]:
-                    parent_prob = self.cdn_query(
-                        [key for key in parent_dict.keys()],
-                        {reflective_var: candidate_value},
-                    ).get_value(
-                        **{key: value for key, value in parent_dict.items()}
-                    )
-                    predicted_utility = self.u_hat_models[utility].predict(
-                        pd.DataFrame([parent_dict])
-                    )[0, 0]
-                    utility_reward_by_name[utility] += parent_prob * predicted_utility
+                
+                parent_combos = self.parent_combinations[utility]
+                if len(parent_combos) == 0:
+                    utility_reward_by_name[utility] = 0.0
+                    continue
+                
+                # Get the expected input column order from the neural network
+                nn_input_cols = self.u_hat_models[utility].input_cols
+                
+                # Build parent array ensuring column order matches neural network expectations
+                parent_array = np.array(
+                    [[parent_dict[col] for col in nn_input_cols] for parent_dict in parent_combos],
+                    dtype=np.float32
+                )
+                
+                # Get CDN query with variables in the same order as neural network expects
+                cdn_result = self.cdn_query(nn_input_cols, {reflective_var: candidate_value})
+                
+                # Extract probabilities - cdn_result should have variables in same order as nn_input_cols
+                if list(cdn_result.variables) == nn_input_cols:
+                    # Order matches, can use fast flatten
+                    parent_probs = cdn_result.values.flatten()
+                else:
+                    # Fallback: extract probabilities respecting the actual parent_combos order
+                    parent_probs = np.array([
+                        cdn_result.get_value(**{col: parent_dict[col] for col in nn_input_cols})
+                        for parent_dict in parent_combos
+                    ])
+                
+                # Batch predict
+                predictions = self.u_hat_models[utility].predict(parent_array)[:, 0]
+                
+                # Compute expected utility as dot product
+                utility_reward_by_name[utility] = float(np.dot(parent_probs, predictions))
+            
             per_value_rewards.append(utility_reward_by_name)
 
-        # Apply current objective weights
+        # Apply current objective weights (vectorized)
         for rewards in per_value_rewards:
             for utility in rewards.keys():
                 rewards[utility] *= self.weights[utility]
@@ -1098,3 +1135,46 @@ class CausalLearningAgent:
     def populate_from_shared_cache(self) -> None:
         """Populate this agent's cache from the shared cache."""
         self._cdn_cache.update(self._shared_cdn_cache)
+
+if __name__ == "__main__":
+    def default_reward(
+        sample: dict[str, int],
+        utility_edges: list[tuple[str, str]],
+        noise: float = 0.0,
+        lower_tier_pooled_reward: dict[str, float] = None,
+    ) -> dict[str, float]:
+        rewards: dict[str, float] = Counter()
+        for var, utility in utility_edges:
+            noise_term = random.gauss(0, noise) if noise > 0 else 0.0
+            if utility == "teacher_regulation":
+                rewards[utility] -= sample["grade_leniency"]
+            else:
+                rewards[utility] += sample[var] + noise_term
+
+        if lower_tier_pooled_reward:
+            for util, reward in lower_tier_pooled_reward.items():
+                rewards[util] += reward
+
+        return rewards
+
+    import cProfile
+    import pstats
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    cla = CausalLearningAgent(
+        sampling_edges=[("A", "B"), ("B", "C")],
+        utility_edges=[("A", "U1"), ("B", "U2"), ("C", "U3")],
+        cpts=[TabularCPD("A", 2, [[0.5], [0.5]]), TabularCPD("B", 2, [[0.5, 0.5], [0.5, 0.5]], evidence=["A"], evidence_card=[2]), TabularCPD("C", 2, [[0.5, 0.5], [0.5, 0.5]], evidence=["B"], evidence_card=[2])],
+        utility_vars={"U1", "U2", "U3"},
+        reflective_vars={"A", "B", "C"},
+        chance_vars=set(),
+        glue_vars=set(),
+        reward_func=default_reward,
+    )
+    cla.train_SA(100)
+
+    profiler.disable()
+    stats = pstats.Stats(profiler)
+    stats.sort_stats('cumtime').print_stats(10)
+    stats.dump_stats('cla_profile.prof')
