@@ -103,8 +103,12 @@ class CLANeuralNetwork:
         if isinstance(input_data, pd.DataFrame):
             X_new = input_data[self.input_cols].values
         else:
-            X_new = np.array(input_data)
-        X_new = torch.tensor(X_new, dtype=torch.float32)
+            X_new = input_data if isinstance(input_data, np.ndarray) else np.array(input_data)
+        
+        # Avoid redundant conversion if already a tensor
+        if not isinstance(X_new, torch.Tensor):
+            X_new = torch.tensor(X_new, dtype=torch.float32)
+        
         self.model.eval()
         with torch.no_grad():
             predictions = self.model(X_new).numpy()
