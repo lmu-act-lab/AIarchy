@@ -3,6 +3,8 @@ from src.training_environment import TrainingEnvironment
 import copy
 import time
 import logging
+import cProfile
+import pstats
 
 # Set up logging for hierarchy operations
 logging.basicConfig(level=logging.INFO)
@@ -258,3 +260,30 @@ class Hierarchy:
         if hasattr(CLA, '_shared_cdn_cache'):
             cache_size = len(CLA._shared_cdn_cache)
             print(f"   Shared cache size: {cache_size} entries")
+
+if __name__ == "__main__":
+    # Example usage with profiling
+    from src.teacher import build_classroom_hierarchy
+    
+    profiler = cProfile.Profile()
+    profiler.enable()
+    
+    # Build a simple hierarchy for profiling
+    from src.final_actlab_sims.models import hierarchy_students
+    
+    hier = build_classroom_hierarchy(
+        list(hierarchy_students.values())[:2],  # Use 2 students for faster profiling
+        pooling_vars=["grades"],
+        glue_vars=["grade_leniency", "curriculum_complexity"],
+        monte_carlo_samples=10,  # Reduced for faster profiling
+    )
+    
+    # Train with reduced iterations for profiling
+    hier.train(cycles=5, parent_iter=1, child_iter=2)
+    
+    profiler.disable()
+    stats = pstats.Stats(profiler)
+    stats.sort_stats('cumtime').print_stats(20)
+    stats.dump_stats('hierarchy_profile.prof')
+    print("\nProfile saved to hierarchy_profile.prof")
+    print("Visualize with: snakeviz hierarchy_profile.prof")
