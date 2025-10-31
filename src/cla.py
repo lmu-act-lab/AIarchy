@@ -10,6 +10,7 @@ from typing import Callable
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from pgmpy.factors.discrete import DiscreteFactor
 from src.ModifiedBayesianNetwork import BayesianNetwork  # type: ignore
+from src.ModifiedCausalInference import FastCausalInference  # type: ignore
 from pgmpy.inference import CausalInference  # type: ignore
 from types import UnionType
 from src.cla_neural_network import CLANeuralNetwork as CLANN
@@ -133,6 +134,8 @@ class CausalLearningAgent:
         self._cdn_cache: dict[
             tuple[tuple[str, ...], tuple[tuple[str, int], ...], int], DiscreteFactor
         ] = {}
+        # Cache model hash to avoid recomputing on every query
+        self._model_hash: int | None = None
 
         for utility in self.utility_vars:
             # Use sorted list to ensure deterministic ordering that matches par_dict()
@@ -145,10 +148,18 @@ class CausalLearningAgent:
                     network_inputs,
                     [utility],
                 )
-        self.inference = CausalInference(self.sampling_model)
+        # Model will be validated after add_cpds() in the loop below
+        # Initialize inference after all CPDs are added
+        self.inference = None  # Will be set after add_cpds validates
 
+        # Add all CPDs without validating after each (validate=False)
         for cpt in cpts:
-            self.sampling_model.add_cpds(cpt)
+            self.sampling_model.add_cpds(cpt, validate=False)
+        # Validate once after all CPDs are added, but skip utility variables
+        # Utility variables don't have CPDs since they're computed from reward functions
+        self.sampling_model.check_model_without_utility_vars(utility_vars=self.utility_vars)
+        # All CPDs validated - now create inference
+        self.inference = FastCausalInference(self.sampling_model)
 
         self.card_dict: dict[str, int] = {
             key: self.sampling_model.get_cardinality(key)
@@ -606,11 +617,15 @@ class CausalLearningAgent:
         DiscreteFactor
             Factor over the queried variables under the intervention.
         """
+        # Use cached hash if available, otherwise compute and cache it
+        if self._model_hash is None:
+            self._model_hash = hash(self.sampling_model)
+        
         # Create cache key that includes the model state
         cache_key = (
             tuple(sorted(query_vars)),
             tuple(sorted(do_evidence.items())),
-            hash(self.sampling_model)  # Include model hash for correct caching
+            self._model_hash  # Use cached hash
         )
         
         # Check instance cache first
@@ -630,8 +645,8 @@ class CausalLearningAgent:
                 cpt = model_copy.get_cpds(node=var)
                 for idx, value in enumerate(cpt.values):
                     cpt.values[idx] = 0 if idx != do_evidence[var] else 1
-            model_copy.do(nodes=shared_vars)
-            inference = CausalInference(model_copy)
+            model_copy.do(nodes=shared_vars, inplace=True)
+            inference = FastCausalInference(model_copy)
             query = inference.query(variables=query_vars, show_progress=False)
             # Store in both instance and shared caches
             self._cdn_cache[cache_key] = query
@@ -639,7 +654,7 @@ class CausalLearningAgent:
             return query
 
         updated_model = self.sampling_model.do(nodes=list(do_evidence.keys()))
-        inference = CausalInference(updated_model)
+        inference = FastCausalInference(updated_model)
         query = inference.query(
             variables=query_vars, evidence=do_evidence, show_progress=False
         )
@@ -686,15 +701,19 @@ class CausalLearningAgent:
                 n_samples=samples, evidence=fixed_evidence, show_progress=False
             )
 
-        # Compute weighted rewards for each row
-        def compute_weighted_rewards(row):
-            sample_dict = row.to_dict()
-            rewards = self.reward_func(sample_dict, self.utility_edges, self.reward_noise, self.lower_tier_pooled_reward)
-            # Multiply each reward by its corresponding weight
-            weighted_reward = {var: rewards[var] * weights[var] for var in weights}
-            return pd.Series(weighted_reward)
-
-        weighted_rewards_df = sample_df.apply(compute_weighted_rewards, axis=1)
+        # Vectorized reward computation - much faster than pandas apply()
+        sample_dicts = sample_df.to_dict('records')
+        all_rewards = [
+            self.reward_func(sample_dict, self.utility_edges, self.reward_noise, self.lower_tier_pooled_reward)
+            for sample_dict in sample_dicts
+        ]
+        
+        # Create weighted rewards DataFrame efficiently
+        weighted_rewards_data = {
+            var: [rewards[var] * weights[var] for rewards in all_rewards]
+            for var in weights
+        }
+        weighted_rewards_df = pd.DataFrame(weighted_rewards_data, index=sample_df.index)
 
         # Combine the original samples with the weighted rewards
         combined_df = pd.concat([sample_df, weighted_rewards_df], axis=1)
@@ -845,10 +864,13 @@ class CausalLearningAgent:
                     )
                     self.sampling_model.remove_cpds(self.sampling_model.get_cpds(candidate_var))
                     self.sampling_model.add_cpds(adjusted_cpt)
+                    # add_cpds() now validates the model, so we can use FastCausalInference
                     # Refresh persistent inference after CPD change
-                    self.inference = CausalInference(self.sampling_model)
+                    self.inference = FastCausalInference(self.sampling_model)
                     # Invalidate cached interventional queries due to model change
                     self._cdn_cache.clear()
+                    # Invalidate hash cache - will recompute on next query
+                    self._model_hash = None
 
             # Step 5: record and cool
             self.memory.append(normal_time_step)
@@ -949,15 +971,43 @@ class CausalLearningAgent:
         predicted utility from the u-hat model. Returns the best assignment and
         its total weighted reward (post-weights).
         
-        Optimized to batch neural network predictions.
+        Optimized to batch neural network predictions and reduce redundant CDN queries.
         """
-        per_value_rewards: list[dict[str, float]] = []
         num_candidate_values = self.card_dict[reflective_var]
-
-        # Pre-compute all CDN queries and batch predictions per utility
+        
+        # Group utilities by their parent sets (sorted) to batch CDN queries
+        # Key: sorted tuple of parent vars, Value: list of utilities with those parents
+        parent_set_to_utilities: dict[tuple[str, ...], list[str]] = {}
+        utility_to_parent_set: dict[str, tuple[str, ...]] = {}
+        
+        for utility in self.utility_vars:
+            if self.u_hat_models[utility] is None:
+                continue
+            # Use sorted tuple to ensure consistent grouping regardless of nn_input_cols order
+            parent_set = tuple(sorted(self.u_hat_models[utility].input_cols))
+            if parent_set not in parent_set_to_utilities:
+                parent_set_to_utilities[parent_set] = []
+            parent_set_to_utilities[parent_set].append(utility)
+            utility_to_parent_set[utility] = parent_set
+        
+        # Pre-compute all CDN queries once per (candidate_value, parent_set) pair
+        cdn_results_cache: dict[tuple[int, tuple[str, ...]], DiscreteFactor] = {}
+        for candidate_value in range(num_candidate_values):
+            for parent_set in parent_set_to_utilities.keys():
+                cache_key = (candidate_value, parent_set)
+                if cache_key not in cdn_results_cache:
+                    # Query with sorted variables (matches cache key logic in cdn_query)
+                    cdn_results_cache[cache_key] = self.cdn_query(
+                        list(parent_set), 
+                        {reflective_var: candidate_value}
+                    )
+        
+        # Now compute rewards using cached CDN results (same computation order as before)
+        per_value_rewards: list[dict[str, float]] = []
         for candidate_value in range(num_candidate_values):
             utility_reward_by_name: dict[str, float] = Counter()
             
+            # Process utilities in original order to preserve behavior
             for utility in self.utility_vars:
                 if self.u_hat_models[utility] is None:
                     utility_reward_by_name[utility] = 0.0
@@ -970,17 +1020,12 @@ class CausalLearningAgent:
                 
                 # Get the expected input column order from the neural network
                 nn_input_cols = self.u_hat_models[utility].input_cols
+                parent_set = utility_to_parent_set[utility]
                 
-                # Build parent array ensuring column order matches neural network expectations
-                parent_array = np.array(
-                    [[parent_dict[col] for col in nn_input_cols] for parent_dict in parent_combos],
-                    dtype=np.float32
-                )
+                # Get cached CDN result
+                cdn_result = cdn_results_cache[(candidate_value, parent_set)]
                 
-                # Get CDN query with variables in the same order as neural network expects
-                cdn_result = self.cdn_query(nn_input_cols, {reflective_var: candidate_value})
-                
-                # Extract probabilities - cdn_result should have variables in same order as nn_input_cols
+                # Extract probabilities - same logic as before
                 if list(cdn_result.variables) == nn_input_cols:
                     # Order matches, can use fast flatten
                     parent_probs = cdn_result.values.flatten()
@@ -991,6 +1036,12 @@ class CausalLearningAgent:
                         for parent_dict in parent_combos
                     ])
                 
+                # Build parent array ensuring column order matches neural network expectations
+                parent_array = np.array(
+                    [[parent_dict[col] for col in nn_input_cols] for parent_dict in parent_combos],
+                    dtype=np.float32
+                )
+                
                 # Batch predict
                 predictions = self.u_hat_models[utility].predict(parent_array)[:, 0]
                 
@@ -999,7 +1050,7 @@ class CausalLearningAgent:
             
             per_value_rewards.append(utility_reward_by_name)
 
-        # Apply current objective weights (vectorized)
+        # Apply current objective weights (vectorized) - same as before
         for rewards in per_value_rewards:
             for utility in rewards.keys():
                 rewards[utility] *= self.weights[utility]
