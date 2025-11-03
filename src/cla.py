@@ -826,7 +826,13 @@ class CausalLearningAgent:
         return cpd
 
     # @profile
-    def train_SA(self, iterations: int) -> None:
+    def train_SA(
+        self,
+        iterations: int,
+        checkpoint_callback: Callable[[int], None] | None = None,
+        checkpoint_interval: int | None = None,
+        start_iteration: int = 0,
+    ) -> None:
         """
         Train the agent using simulated annealing for a number of iterations.
 
@@ -834,7 +840,14 @@ class CausalLearningAgent:
         ----------
         iterations : int
             Number of iterations to train the agent for.
+        checkpoint_callback : Callable[[int], None] | None, optional
+            Callback function to call when saving checkpoints. Called with absolute iteration number.
+        checkpoint_interval : int | None, optional
+            Save checkpoint every N iterations. Must be provided if checkpoint_callback is set.
+        start_iteration : int, optional
+            Starting iteration number (for continuing training). Defaults to 0.
         """
+        current_iteration = start_iteration
         while iterations > 0:
             # Track EMA history for analysis and plotting
             self.ema_history.append(copy.deepcopy(self.ema))
@@ -876,6 +889,12 @@ class CausalLearningAgent:
             self.memory.append(normal_time_step)
             self.temperature *= self.cooling_factor
             iterations -= 1
+            current_iteration += 1
+            
+            # Save checkpoint if callback provided and interval reached
+            if checkpoint_callback and checkpoint_interval:
+                if current_iteration % checkpoint_interval == 0:
+                    checkpoint_callback(current_iteration)
 
     def _update_ema_and_collect_adjustments(self) -> set[str]:
         """

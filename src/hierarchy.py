@@ -5,6 +5,7 @@ import time
 import logging
 import cProfile
 import pstats
+import os
 
 # Set up logging for hierarchy operations
 logging.basicConfig(level=logging.INFO)
@@ -197,12 +198,45 @@ class Hierarchy:
         print(f"   ✅ Child update completed in {update_time:.2f}s")
         print(f"🔗 Glue variable update completed in {glue_time:.2f}s")
 
-    def train(self, cycles, parent_iter, child_iter):
+    def train(self, cycles, parent_iter, child_iter, checkpoint_dir=None, 
+              child_checkpoint_interval=None, parent_checkpoint_interval=None,
+              child_names=None, parent_name="Parent"):
+        """
+        Train the hierarchy with cycles of child -> pool -> parent -> glue.
+        
+        Parameters
+        ----------
+        cycles : int
+            Number of training cycles.
+        parent_iter : int
+            Number of iterations to train parents per cycle.
+        child_iter : int
+            Number of iterations to train children per cycle.
+        checkpoint_dir : str | None, optional
+            Base directory for checkpoints. If None, no checkpoints are saved.
+            Checkpoints will be saved to {checkpoint_dir}/children/{name}/ and {checkpoint_dir}/parents/
+        child_checkpoint_interval : int | None, optional
+            Save child checkpoints every N iterations. If None, no checkpoints are saved for children.
+        parent_checkpoint_interval : int | None, optional
+            Save parent checkpoints every N iterations. If None, no checkpoints are saved for parents.
+        child_names : list[str] | None, optional
+            Names for each child group (for checkpoint organization). If None, uses indices.
+        parent_name : str, optional
+            Name for parent group (default: "Parent").
+        """
         print(f"\n🎓 Starting Hierarchical Training")
         print(f"   Cycles: {cycles}, Parent iterations: {parent_iter}, Child iterations: {child_iter}")
         print(f"   Total child groups: {len(self.children)}")
         print(f"   Total parent groups: {len(self.parents)}")
         print(f"   Monte Carlo samples per agent: {self.monte_carlo_samples}")
+        
+        if checkpoint_dir:
+            if child_checkpoint_interval:
+                print(f"💾 Child checkpointing enabled: saving every {child_checkpoint_interval} iterations")
+            if parent_checkpoint_interval:
+                print(f"💾 Parent checkpointing enabled: saving every {parent_checkpoint_interval} iterations")
+            if not child_checkpoint_interval and not parent_checkpoint_interval:
+                print(f"💾 Checkpoint directory specified but no intervals set - no checkpoints will be saved")
         
         total_start = time.time()
         
@@ -217,7 +251,23 @@ class Hierarchy:
             for child_group_idx, children in enumerate(self.children):
                 group_start = time.time()
                 print(f"   Training child group {child_group_idx + 1}/{len(self.children)} ({len(children)} agents)")
-                self.TE.train(child_iter, "SA", children)
+                
+                # Set up checkpoint directory for this child group
+                child_checkpoint_dir = None
+                child_agent_name = None
+                if checkpoint_dir and child_checkpoint_interval:
+                    child_name = child_names[child_group_idx] if child_names and child_group_idx < len(child_names) else f"Child_{child_group_idx}"
+                    child_checkpoint_dir = os.path.join(checkpoint_dir, "children", child_name, "checkpoints")
+                    child_agent_name = child_name
+                
+                self.TE.train(
+                    child_iter, 
+                    "SA", 
+                    children,
+                    checkpoint_dir=child_checkpoint_dir,
+                    checkpoint_interval=child_checkpoint_interval,
+                    agent_name=child_agent_name
+                )
                 group_time = time.time() - group_start
                 print(f"   ✅ Child group {child_group_idx + 1} completed in {group_time:.2f}s")
             
@@ -234,7 +284,23 @@ class Hierarchy:
             for parent_group_idx, parents in enumerate(self.parents):
                 group_start = time.time()
                 print(f"   Training parent group {parent_group_idx + 1}/{len(self.parents)} ({len(parents)} agents)")
-                self.TE.train(parent_iter, "SA", parents)
+                
+                # Set up checkpoint directory for this parent group
+                parent_checkpoint_dir = None
+                parent_agent_name = None
+                if checkpoint_dir and parent_checkpoint_interval:
+                    current_parent_name = f"{parent_name}_{parent_group_idx}" if len(self.parents) > 1 else parent_name
+                    parent_checkpoint_dir = os.path.join(checkpoint_dir, "parents", current_parent_name, "checkpoints")
+                    parent_agent_name = current_parent_name
+                
+                self.TE.train(
+                    parent_iter, 
+                    "SA", 
+                    parents,
+                    checkpoint_dir=parent_checkpoint_dir,
+                    checkpoint_interval=parent_checkpoint_interval,
+                    agent_name=parent_agent_name
+                )
                 group_time = time.time() - group_start
                 print(f"   ✅ Parent group {parent_group_idx + 1} completed in {group_time:.2f}s")
             

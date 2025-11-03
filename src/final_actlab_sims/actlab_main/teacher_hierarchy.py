@@ -42,11 +42,28 @@ def main() -> None:
         list(hierarchy_students.values()),
         pooling_vars=["grades"],
         glue_vars=["grade_leniency", "curriculum_complexity"],
-        monte_carlo_samples=100,
+        monte_carlo_samples=1,
     )
 
+    # Set up checkpoint directory
+    checkpoint_dir = f"{out_root}/checkpoints"
+    child_checkpoint_interval = 10   # Save child checkpoints every N iterations
+    parent_checkpoint_interval = 5   # Save parent checkpoints every N iterations
+    
+    # Get student names for checkpoint organization
+    student_names = list(hierarchy_students.keys())
+
     # Train: cycles of child -> pool -> parent -> glue
-    hier.train(cycles=800, parent_iter=1, child_iter=5)
+    hier.train(
+        cycles=50, 
+        parent_iter=1, 
+        child_iter=5,
+        checkpoint_dir=checkpoint_dir,
+        child_checkpoint_interval=child_checkpoint_interval,
+        parent_checkpoint_interval=parent_checkpoint_interval,
+        child_names=student_names,
+        parent_name="Teacher"
+    )
 
     # Visualize/save similar to other sims
     TE = TrainingEnvironment()

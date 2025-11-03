@@ -9,6 +9,9 @@ import time
 import pandas as pd
 import random
 import numpy as np
+import pickle
+import os
+from pathlib import Path
 
 # --- colour map -----------------------------------------------------------
 # (All hex codes are colour-blind–safe; tweak as you like)
@@ -37,23 +40,203 @@ def lookup_color(var_name: str, i: int = 0) -> str:
 
 class TrainingEnvironment:
     def train(
-        self, mc_rep: int, style: str, agents: list[CausalLearningAgent]
+        self,
+        mc_rep: int,
+        style: str,
+        agents: list[CausalLearningAgent],
+        checkpoint_dir: str | None = None,
+        checkpoint_interval: int | None = None,
+        agent_name: str | None = None,
     ) -> list[CausalLearningAgent]:
         """
         Trains n agents for a specified number of monte carlo repetitions using a specified style.
+        
+        Parameters
+        ----------
+        mc_rep : int
+            Number of iterations to train each agent.
+        style : str
+            Training style ("SA" for Simulated Annealing, "ME" for Maximum Entropy).
+        agents : list[CausalLearningAgent]
+            List of Monte Carlo agents to train.
+        checkpoint_dir : str | None, optional
+            Directory to save checkpoints. If None, no checkpoints are saved.
+        checkpoint_interval : int | None, optional
+            Save checkpoints every N iterations. If None, no checkpoints are saved.
+        agent_name : str | None, optional
+            Base name for the agent (used in checkpoint filenames). If None, uses "agent".
         """
+        # Create checkpoint directory if checkpointing is enabled
+        if checkpoint_dir and checkpoint_interval:
+            Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
+            base_name = agent_name if agent_name else "agent"
+            print(f"💾 Checkpointing enabled: saving every {checkpoint_interval} iterations to {checkpoint_dir}")
+        
+        # Determine starting iteration from agent memory
+        start_iteration = len(agents[0].memory) if agents and agents[0].memory else 0
+        
         # print("=== Training Begin ===")
         start_time = time.time()
-        for agent in agents:
+        for idx, agent in enumerate(agents):
             # print(f"training agent number {agents.index(agent) + 1}")
-            match style:
-                case "SA":
-                    agent.train_SA(mc_rep)
-                case "ME":
-                    agent.train_ME(mc_rep)
+            
+            # Modify train_SA to accept checkpoint callback
+            if checkpoint_dir and checkpoint_interval:
+                # Create closure to capture current agent and idx correctly
+                def make_checkpoint_callback(agent_instance, agent_index):
+                    return lambda iteration: self._save_checkpoint(
+                        agent_instance, agent_index, iteration, checkpoint_dir, base_name
+                    )
+                checkpoint_callback = make_checkpoint_callback(agent, idx)
+                match style:
+                    case "SA":
+                        agent.train_SA(
+                            mc_rep,
+                            checkpoint_callback=checkpoint_callback,
+                            checkpoint_interval=checkpoint_interval,
+                            start_iteration=start_iteration
+                        )
+                    case "ME":
+                        agent.train_ME(mc_rep)
+            else:
+                match style:
+                    case "SA":
+                        agent.train_SA(mc_rep, start_iteration=start_iteration)
+                    case "ME":
+                        agent.train_ME(mc_rep)
         end_time = time.time()
         # print(f"=== Training End (Elapsed: {end_time - start_time:.2f}s) ===")
         return agents
+    
+    def _save_checkpoint(
+        self,
+        agent: CausalLearningAgent,
+        agent_idx: int,
+        iteration: int,
+        checkpoint_dir: str,
+        base_name: str,
+    ) -> None:
+        """
+        Save a checkpoint of a single agent.
+        
+        Parameters
+        ----------
+        agent : CausalLearningAgent
+            The agent to save.
+        agent_idx : int
+            Index of this agent in the Monte Carlo list.
+        iteration : int
+            Current training iteration (absolute, not relative).
+        checkpoint_dir : str
+            Directory to save the checkpoint.
+        base_name : str
+            Base name for the checkpoint file.
+        """
+        # Create agent-specific subdirectory
+        agent_dir = os.path.join(checkpoint_dir, f"{base_name}_{agent_idx:04d}")
+        Path(agent_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Save checkpoint file with consistent naming
+        checkpoint_file = os.path.join(agent_dir, f"iter_{iteration:06d}.pkl")
+        with open(checkpoint_file, "wb") as f:
+            pickle.dump(agent, f)
+        
+        print(f"💾 Saved checkpoint: {checkpoint_file}")
+    
+    @staticmethod
+    def find_latest_checkpoint_dir(checkpoint_dir: str, base_name: str) -> list[str]:
+        """
+        Find the latest checkpoint file for each agent in a checkpoint directory.
+        
+        Parameters
+        ----------
+        checkpoint_dir : str
+            Directory containing agent checkpoint folders.
+        base_name : str
+            Base name used for agent folders (e.g., "Amy").
+            
+        Returns
+        -------
+        list[str]
+            List of paths to the latest checkpoint file for each agent, sorted by agent index.
+        """
+        latest_checkpoints = []
+        agent_dirs = sorted([d for d in os.listdir(checkpoint_dir) 
+                           if os.path.isdir(os.path.join(checkpoint_dir, d)) 
+                           and d.startswith(f"{base_name}_")])
+        
+        for agent_dir_name in agent_dirs:
+            agent_dir = os.path.join(checkpoint_dir, agent_dir_name)
+            checkpoint_files = [f for f in os.listdir(agent_dir) if f.endswith('.pkl') and f.startswith('iter_')]
+            
+            if checkpoint_files:
+                # Extract iteration numbers and find the latest
+                iterations = []
+                for f in checkpoint_files:
+                    try:
+                        iter_num = int(f.replace('iter_', '').replace('.pkl', ''))
+                        iterations.append((iter_num, f))
+                    except ValueError:
+                        continue
+                
+                if iterations:
+                    latest_file = max(iterations, key=lambda x: x[0])[1]
+                    latest_checkpoints.append(os.path.join(agent_dir, latest_file))
+        
+        return sorted(latest_checkpoints)
+    
+    def save_agents_checkpoint(
+        self,
+        agents: list[CausalLearningAgent],
+        checkpoint_dir: str,
+        base_name: str = "agents",
+        iteration: int | None = None,
+    ) -> None:
+        """
+        Save all agents as a checkpoint.
+        
+        Parameters
+        ----------
+        agents : list[CausalLearningAgent]
+            List of agents to save.
+        checkpoint_dir : str
+            Directory to save checkpoints.
+        base_name : str, optional
+            Base name for the checkpoint directory. Defaults to "agents".
+        iteration : int | None, optional
+            Iteration number to include in filename. If None, uses timestamp.
+        """
+        Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
+        
+        if iteration is not None:
+            checkpoint_file = os.path.join(checkpoint_dir, f"{base_name}_iter_{iteration:06d}.pkl")
+        else:
+            timestamp = int(time.time())
+            checkpoint_file = os.path.join(checkpoint_dir, f"{base_name}_{timestamp}.pkl")
+        
+        with open(checkpoint_file, "wb") as f:
+            pickle.dump(agents, f)
+        
+        print(f"💾 Saved checkpoint: {checkpoint_file}")
+        return checkpoint_file
+    
+    @staticmethod
+    def load_checkpoint(checkpoint_file: str) -> CausalLearningAgent | list[CausalLearningAgent]:
+        """
+        Load a checkpoint from a pickle file.
+        
+        Parameters
+        ----------
+        checkpoint_file : str
+            Path to the checkpoint pickle file.
+            
+        Returns
+        -------
+        CausalLearningAgent | list[CausalLearningAgent]
+            The loaded agent(s).
+        """
+        with open(checkpoint_file, "rb") as f:
+            return pickle.load(f)
 
     def pre_training_visualization(self, agent, name="", save=False) -> None:
         """
