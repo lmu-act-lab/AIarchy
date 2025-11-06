@@ -12,7 +12,6 @@ import numpy as np
 import pickle
 import os
 from pathlib import Path
-
 # --- colour map -----------------------------------------------------------
 # (All hex codes are colour-blind–safe; tweak as you like)
 COLORS = {
@@ -75,13 +74,11 @@ class TrainingEnvironment:
         # Determine starting iteration from agent memory
         start_iteration = len(agents[0].memory) if agents and agents[0].memory else 0
         
-        # print("=== Training Begin ===")
         start_time = time.time()
         for idx, agent in enumerate(agents):
-            # print(f"training agent number {agents.index(agent) + 1}")
-            
             # Modify train_SA to accept checkpoint callback
             if checkpoint_dir and checkpoint_interval:
+                base_name = agent_name if agent_name else "agent"
                 # Create closure to capture current agent and idx correctly
                 def make_checkpoint_callback(agent_instance, agent_index):
                     return lambda iteration: self._save_checkpoint(
@@ -105,7 +102,6 @@ class TrainingEnvironment:
                     case "ME":
                         agent.train_ME(mc_rep)
         end_time = time.time()
-        # print(f"=== Training End (Elapsed: {end_time - start_time:.2f}s) ===")
         return agents
     
     def _save_checkpoint(
@@ -613,37 +609,6 @@ class TrainingEnvironment:
         else:
             plt.show()
 
-    def plot_expected_reward(
-        self, agents: list["CausalLearningAgent"], mc_reps: int, name="", save=False
-    ) -> None:
-        """
-        Plots the average expected reward over a number of monte carlo repetitions across agents.
-        """
-        average_rewards = []
-        # For each agent, simulate evaluation mc_reps times and average the losses
-        for agent in agents:
-            total_reward = 0
-            for _ in range(mc_reps):
-                # Assumes agent has a test_dataframe attribute or similar method for evaluation.
-                # Here we use a dummy input DataFrame by sampling from agent.memory if available.
-                if agent.memory:
-                    # Use the last recorded time step's memory as sample
-                    last_memory = agent.memory[-1].memory
-                    total_reward += agent.evaluate(last_memory)
-                else:
-                    total_reward += 0
-            average_rewards.append(total_reward / mc_reps)
-
-        fig = plt.figure(figsize=(12, 9))
-        plt.bar(range(len(agents)), average_rewards)
-        plt.xlabel("Agent Index")
-        plt.ylabel("Average Expected Reward")
-        plt.title(f"Expected Reward over {mc_reps} Monte Carlo Repetitions")
-        if save:
-            fig.savefig(f"{name}/expected_reward.png")
-            plt.close(fig)
-        else:
-            plt.show()
 
     def plot_monte_carlo(
         self,
