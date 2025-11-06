@@ -16,6 +16,7 @@ from types import UnionType
 from src.cla_neural_network import CLANeuralNetwork as CLANN
 from itertools import product
 from src.timestep import TimeStep
+from src.hit_tracking_cache import HitTrackingCache
 
 warnings.filterwarnings("ignore")
 
@@ -23,9 +24,8 @@ warnings.filterwarnings("ignore")
 class CausalLearningAgent:
     # Class-level shared cache accessible to all Monte Carlo agents
     # Key: (query_vars, do_evidence, model_hash) -> DiscreteFactor
-    _shared_cdn_cache: dict[
-        tuple[tuple[str, ...], tuple[tuple[str, int], ...], int], DiscreteFactor
-    ] = {}
+    # Uses hit-tracking cache to evict least-used entries
+    _shared_cdn_cache: HitTrackingCache = HitTrackingCache(max_size=5000)
 
     def __init__(
         self,
@@ -129,6 +129,9 @@ class CausalLearningAgent:
         self.reward_noise = reward_noise
         self.cum_memory: pd.DataFrame
         self.u_hat_models: dict[str, CLANN | None] = {}
+        # Maximum number of TimeSteps to keep with full DataFrames
+        # Older TimeSteps will have DataFrames deleted to save memory
+        self.max_dataframe_timesteps: int = 50
         # Cache for cdn_query to avoid repeated inference on identical queries
         # Key: (query_vars, do_evidence, model_hash) -> DiscreteFactor
         self._cdn_cache: dict[
@@ -633,10 +636,11 @@ class CausalLearningAgent:
             return self._cdn_cache[cache_key]
         
         # Check shared cache if not found in instance cache
-        if cache_key in self._shared_cdn_cache:
+        cached_value = self._shared_cdn_cache.get(cache_key)
+        if cached_value is not None:
             # Copy to instance cache for faster future access
-            self._cdn_cache[cache_key] = self._shared_cdn_cache[cache_key]
-            return self._cdn_cache[cache_key]
+            self._cdn_cache[cache_key] = cached_value
+            return cached_value
 
         shared_vars = [var for var in query_vars if var in do_evidence.keys()]
         if len(shared_vars) > 0:
@@ -650,7 +654,7 @@ class CausalLearningAgent:
             query = inference.query(variables=query_vars, show_progress=False)
             # Store in both instance and shared caches
             self._cdn_cache[cache_key] = query
-            self._shared_cdn_cache[cache_key] = query
+            self._shared_cdn_cache.set(cache_key, query)
             return query
 
         updated_model = self.sampling_model.do(nodes=list(do_evidence.keys()))
@@ -660,7 +664,7 @@ class CausalLearningAgent:
         )
         # Store in both instance and shared caches
         self._cdn_cache[cache_key] = query
-        self._shared_cdn_cache[cache_key] = query
+        self._shared_cdn_cache.set(cache_key, query)
         return query
 
     # @profile
@@ -887,6 +891,18 @@ class CausalLearningAgent:
 
             # Step 5: record and cool
             self.memory.append(normal_time_step)
+            
+            # Clean up DataFrames from old TimeSteps to save memory
+            # Keep only the last max_dataframe_timesteps with full DataFrames
+            # Only process the TimeStep that just fell out of the window (more efficient)
+            if len(self.memory) > self.max_dataframe_timesteps:
+                # The TimeStep at this index just fell out of the window
+                old_timestep_idx = len(self.memory) - self.max_dataframe_timesteps - 1
+                old_timestep = self.memory[old_timestep_idx]
+                if hasattr(old_timestep, 'memory') and old_timestep.memory is not None:
+                    # Delete DataFrame but keep aggregated data (average_reward, average_sample, weights)
+                    old_timestep.memory = None
+            
             self.temperature *= self.cooling_factor
             iterations -= 1
             current_iteration += 1
@@ -922,6 +938,13 @@ class CausalLearningAgent:
         Train per-utility predictive models on the latest simulated samples.
         Optimized to avoid repeated DataFrame operations.
         """
+        # Ensure DataFrame exists (should always be the case for current TimeStep)
+        if normal_time_step.memory is None:
+            raise ValueError(
+                "Cannot train u_hat models: TimeStep DataFrame was deleted. "
+                "This should not happen for the current TimeStep."
+            )
+        
         # Preprocess data once for all models
         hidden_cols_to_drop = [col for col in self.hidden_vars if col in normal_time_step.memory.columns]
         if hidden_cols_to_drop:
@@ -1201,10 +1224,17 @@ class CausalLearningAgent:
     def get_shared_cache_size(cls) -> int:
         """Get the size of the shared cache."""
         return len(cls._shared_cdn_cache)
+    
+    @classmethod
+    def get_shared_cache_stats(cls) -> dict:
+        """Get statistics about the shared cache."""
+        return cls._shared_cdn_cache.get_stats()
 
     def populate_from_shared_cache(self) -> None:
         """Populate this agent's cache from the shared cache."""
-        self._cdn_cache.update(self._shared_cdn_cache)
+        # Note: This method is less useful with HitTrackingCache as it doesn't support direct iteration
+        # Cache entries are accessed via get() which tracks hits
+        pass
 
 if __name__ == "__main__":
     def default_reward(
