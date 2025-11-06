@@ -6,10 +6,26 @@ import logging
 import cProfile
 import pstats
 import os
+import warnings
+from src.final_actlab_sims.set_seed import set_seed
 
-# Set up logging for hierarchy operations
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Optional lightweight memory tracking with psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
+
+# Set up environment
+set_seed()
+
+# Suppress all warnings
+warnings.filterwarnings("ignore")
+
+# Suppress pgmpy logging warnings
+logging.getLogger("pgmpy").setLevel(logging.ERROR)
+
 
 class Hierarchy:
     def __init__(
@@ -240,6 +256,16 @@ class Hierarchy:
         
         total_start = time.time()
         
+        # Lightweight memory tracking (if enabled and psutil available)
+        memory_snapshots = []
+        if hasattr(self, '_memory_profiling_enabled') and self._memory_profiling_enabled:
+            if PSUTIL_AVAILABLE:
+                process = psutil.Process(os.getpid())
+                memory_snapshots.append((0, process.memory_info().rss / 1024 / 1024))  # MB
+            else:
+                print("⚠️  Memory profiling enabled but psutil not available. Install with: pip install psutil")
+                self._memory_profiling_enabled = False
+        
         for cycle in range(cycles):
             print(f"\n📚 === CYCLE {cycle + 1}/{cycles} ===")
             cycle_start = time.time()
@@ -313,6 +339,13 @@ class Hierarchy:
             cycle_time = time.time() - cycle_start
             print(f"📚 Cycle {cycle + 1} completed in {cycle_time:.2f}s")
             print(f"   Breakdown: Children={child_train_time:.1f}s, Parents={parent_train_time:.1f}s, Updates={cycle_time - child_train_time - parent_train_time:.1f}s")
+            
+            # Lightweight memory snapshot (minimal overhead)
+            if hasattr(self, '_memory_profiling_enabled') and self._memory_profiling_enabled and PSUTIL_AVAILABLE:
+                process = psutil.Process(os.getpid())
+                memory_mb = process.memory_info().rss / 1024 / 1024
+                memory_snapshots.append((cycle + 1, memory_mb))
+                print(f"   Memory: {memory_mb:.2f} MB")
         
         total_time = time.time() - total_start
         avg_cycle_time = total_time / cycles
@@ -325,10 +358,32 @@ class Hierarchy:
         # Cache statistics
         if hasattr(CLA, '_shared_cdn_cache'):
             cache_size = len(CLA._shared_cdn_cache)
+            cache_stats = CLA.get_shared_cache_stats()
             print(f"   Shared cache size: {cache_size} entries")
+            print(f"   Cache stats: avg_hits={cache_stats['avg_hits']:.1f}, "
+                  f"max_hits={cache_stats['max_hits']}, min_hits={cache_stats['min_hits']}")
+        
+        # Memory profiling results (lightweight - no overhead during training)
+        if hasattr(self, '_memory_profiling_enabled') and self._memory_profiling_enabled and PSUTIL_AVAILABLE:
+            if memory_snapshots:
+                print(f"\n📊 Memory Profiling Results (lightweight tracking):")
+                print(f"   Cycle | Memory (MB)")
+                print(f"   ----- | -----------")
+                for cycle_num, memory_mb in memory_snapshots:
+                    print(f"   {cycle_num:5d} | {memory_mb:11.2f}")
+                
+                # Calculate growth
+                if len(memory_snapshots) > 1:
+                    initial_memory = memory_snapshots[0][1]
+                    final_memory = memory_snapshots[-1][1]
+                    growth_mb = final_memory - initial_memory
+                    growth_per_cycle = growth_mb / (len(memory_snapshots) - 1) if len(memory_snapshots) > 1 else 0
+                    print(f"\n   Initial memory: {initial_memory:.2f} MB")
+                    print(f"   Final memory: {final_memory:.2f} MB")
+                    print(f"   Total growth: {growth_mb:.2f} MB ({growth_per_cycle:.2f} MB per cycle)")
 
 if __name__ == "__main__":
-    # Example usage with profiling
+    # Example usage with profiling (performance + lightweight memory)
     from src.teacher import build_classroom_hierarchy
     
     profiler = cProfile.Profile()
@@ -344,12 +399,15 @@ if __name__ == "__main__":
         monte_carlo_samples=10,  # Reduced for faster profiling
     )
     
+    # Enable lightweight memory profiling (no performance overhead)
+    hier._memory_profiling_enabled = True
+    
     # Train with reduced iterations for profiling
-    hier.train(cycles=5, parent_iter=1, child_iter=2)
+    hier.train(cycles=50, parent_iter=1, child_iter=5)
     
     profiler.disable()
     stats = pstats.Stats(profiler)
     stats.sort_stats('cumtime').print_stats(20)
     stats.dump_stats('hierarchy_profile.prof')
-    print("\nProfile saved to hierarchy_profile.prof")
-    print("Visualize with: snakeviz hierarchy_profile.prof")
+    print("\n📈 Performance profile saved to hierarchy_profile.prof")
+    print("   Visualize with: snakeviz hierarchy_profile.prof")
