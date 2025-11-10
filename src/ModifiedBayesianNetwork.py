@@ -2,6 +2,7 @@ from pgmpy.models import BayesianNetwork  # type: ignore
 from pgmpy.sampling import BayesianModelSampling  # type: ignore
 from pgmpy.factors.discrete import TabularCPD  # type: ignore
 from pgmpy.utils import compat_fns  # type: ignore
+import numpy as np
 
 class BayesianNetwork(BayesianNetwork):
     def __eq__(self, other):
@@ -10,7 +11,30 @@ class BayesianNetwork(BayesianNetwork):
       return False
     
     def __hash__(self):
-      return hash(tuple(cpd.to_factor() for cpd in self.get_cpds()))
+        """
+        Compute hash of the Bayesian network based on its CPDs.
+        Uses deterministic ordering (sorted by variable name) and rounds values
+        to 2 decimal places to handle floating point precision issues.
+        This ensures identical models produce identical hashes for cache efficiency.
+        """
+        # Sort CPDs by variable name for deterministic ordering
+        # This matches the set-based equality semantics
+        cpds = sorted(self.get_cpds(), key=lambda cpd: cpd.variable)
+        
+        factors = []
+        for cpd in cpds:
+            factor = cpd.to_factor()
+            # Round values to 2 decimal places to handle floating point precision
+            # This ensures models with equivalent (rounded) CPDs hash to the same value
+            rounded_values = np.round(factor.values, decimals=3)
+            # Create hashable representation: variables tuple and rounded values tuple
+            factors.append((
+                tuple(factor.variables),  # Variable names in deterministic order
+                tuple(rounded_values.flatten()),  # Rounded probability values
+                tuple(factor.cardinality)  # Cardinalities for each variable
+            ))
+        
+        return hash(tuple(factors))
     
     def add_cpds(self, *cpds, validate=True):
         """
