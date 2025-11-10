@@ -390,20 +390,20 @@ if __name__ == "__main__":
     profiler.enable()
     
     # Build a simple hierarchy for profiling
-    from src.final_actlab_sims.models import hierarchy_students
+    from src.final_actlab_sims.models import hierarchy_students_old as hierarchy_students
     
     hier = build_classroom_hierarchy(
-        list(hierarchy_students.values())[:2],  # Use 2 students for faster profiling
+        list(hierarchy_students.values()),  # Use 2 students for faster profiling
         pooling_vars=["grades"],
         glue_vars=["grade_leniency", "curriculum_complexity"],
-        monte_carlo_samples=10,  # Reduced for faster profiling
+        monte_carlo_samples=100,  # Reduced for faster profiling
     )
     
     # Enable lightweight memory profiling (no performance overhead)
     hier._memory_profiling_enabled = True
     
     # Train with reduced iterations for profiling
-    hier.train(cycles=50, parent_iter=1, child_iter=5)
+    hier.train(cycles=3, parent_iter=1, child_iter=5)
     
     profiler.disable()
     stats = pstats.Stats(profiler)
