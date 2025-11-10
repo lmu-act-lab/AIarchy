@@ -16,7 +16,7 @@ from types import UnionType
 from src.cla_neural_network import CLANeuralNetwork as CLANN
 from itertools import product
 from src.timestep import TimeStep
-from src.hit_tracking_cache import HitTrackingCache
+from src.lru_cache import LRUCache
 
 warnings.filterwarnings("ignore")
 
@@ -24,8 +24,8 @@ warnings.filterwarnings("ignore")
 class CausalLearningAgent:
     # Class-level shared cache accessible to all Monte Carlo agents
     # Key: (query_vars, do_evidence, model_hash) -> DiscreteFactor
-    # Uses hit-tracking cache to evict least-used entries
-    _shared_cdn_cache: HitTrackingCache = HitTrackingCache(max_size=5000)
+    # Uses LRU eviction to efficiently manage memory
+    _shared_cdn_cache: LRUCache = LRUCache(max_size=500000)
 
     def __init__(
         self,
@@ -131,7 +131,7 @@ class CausalLearningAgent:
         self.u_hat_models: dict[str, CLANN | None] = {}
         # Maximum number of TimeSteps to keep with full DataFrames
         # Older TimeSteps will have DataFrames deleted to save memory
-        self.max_dataframe_timesteps: int = 50
+        self.max_dataframe_timesteps: int = 10
         # Cache for cdn_query to avoid repeated inference on identical queries
         # Key: (query_vars, do_evidence, model_hash) -> DiscreteFactor
         self._cdn_cache: dict[
@@ -730,48 +730,8 @@ class CausalLearningAgent:
             next(iter(do)) if do else None,
         )
 
+
     def nudge_cpt(
-        self,
-        cpd: TabularCPD,
-        evidence: dict[str, int],
-        increase_factor: float,
-        reward: float,
-    ) -> TabularCPD:
-        """
-        Nudges specific value in CPT.
-
-        Parameters
-        ----------
-        cpd : TabularCPD
-            Structure representing the CPT.
-        evidence : dict[str, int]
-            Evidence of value to be nudged.
-        increase_factor : float
-            How much to nudge value.
-        reward : float
-            Reward signal to nudge value by.
-
-        Returns
-        -------
-        TabularCPD
-            New CPT with nudged value.
-        """
-        values: np.ndarray = cpd.values
-        indices: list[int] = [evidence[variable] for variable in cpd.variables]
-
-        tuple_indices: tuple[int, ...] = tuple(indices)
-
-        values[tuple_indices] += np.round(
-            values[tuple_indices] * increase_factor * reward, decimals=3
-        )
-
-        sum_values: list = np.sum(values, axis=0)
-        normalized_values: list = values / sum_values
-
-        cpd.values = normalized_values
-        return cpd
-
-    def nudge_cpt_new(
         self,
         cpd: TabularCPD,
         tweak_dict: dict[str, int],
@@ -818,14 +778,13 @@ class CausalLearningAgent:
 
             tuple_indices: tuple[int, ...] = tuple(indices)
 
-            values[tuple_indices] += np.round(
-                values[tuple_indices] * increase_factor * reward, decimals=3
-            )
+            values[tuple_indices] += values[tuple_indices] * increase_factor * reward
+            
 
         # Corrected the indentation to ensure normalization happens after the loop
         sum_values: np.ndarray = np.sum(values, axis=0)
-        normalized_values: np.ndarray = np.round(values / sum_values, decimals=4)
-
+        normalized_values: np.ndarray = (values / sum_values)
+        normalized_values = np.round(normalized_values, decimals=3)
         cpd.values = normalized_values
         return cpd
 
@@ -873,7 +832,7 @@ class CausalLearningAgent:
                 chosen_value, interventional_reward = self._evaluate_reflective_assignment(candidate_var, normal_time_step)
                 delta: float = interventional_reward - sum(normal_time_step.average_reward.values())
                 if self._accept_metropolis(delta):
-                    adjusted_cpt = self.nudge_cpt_new(
+                    adjusted_cpt = self.nudge_cpt(
                         self.sampling_model.get_cpds(candidate_var),
                         {candidate_var: chosen_value},
                         self.cpt_increase_factor,
@@ -1232,7 +1191,6 @@ class CausalLearningAgent:
 
     def populate_from_shared_cache(self) -> None:
         """Populate this agent's cache from the shared cache."""
-        # Note: This method is less useful with HitTrackingCache as it doesn't support direct iteration
         # Cache entries are accessed via get() which tracks hits
         pass
 
